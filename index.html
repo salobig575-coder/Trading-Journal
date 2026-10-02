@@ -4,8 +4,10 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <title>Trading Journal</title>
-<meta name="theme-color" content="#f2f2f7" media="(prefers-color-scheme: light)">
-<meta name="theme-color" content="#000000" media="(prefers-color-scheme: dark)">
+<meta name="color-scheme" content="light dark">
+<meta name="format-detection" content="telephone=no">
+<meta name="theme-color" content="#f6f3ee" media="(prefers-color-scheme: light)">
+<meta name="theme-color" content="#0b0a08" media="(prefers-color-scheme: dark)">
 <meta name="description" content="Trading Journal 2026: Trades, Analysen, Statistiken, Routine und Trading-Model-Checklisten.">
 <link rel="manifest" href="manifest.json">
 <link rel="icon" href="icons/logo-dark.svg" type="image/svg+xml" media="(prefers-color-scheme: light)">
@@ -18,10 +20,13 @@
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
 <link rel="preload" href="fonts/inter-latin.woff2" as="font" type="font/woff2" crossorigin>
 <link rel="stylesheet" href="fonts/fonts.css">
+<link rel="stylesheet" href="css/palette.css">
 <link rel="stylesheet" href="css/style.css">
 <script>
   (function () {
     try {
+      var pal = localStorage.getItem('palette');
+      if (pal === 'classic') document.documentElement.setAttribute('data-palette', 'classic');
       var t = localStorage.getItem('theme');
       if (t === 'light' || t === 'dark') document.documentElement.setAttribute('data-theme', t);
     } catch (e) {}
@@ -74,7 +79,7 @@
   <main id="view"></main>
 </div>
 
-<nav class="dock">
+<nav class="dock" aria-label="Hauptnavigation">
   <div class="dock-in">
     <button class="tab" data-route="home"><span class="ic"></span>Heute</button>
     <button class="tab" data-route="journal"><span class="ic"></span>Journal</button>
@@ -95,6 +100,7 @@
 <script src="js/fx.js"></script>
 <script src="js/seed.js"></script>
 <script src="js/habits.js"></script>
+<script src="js/routine.js"></script>
 <script src="js/journal.js"></script>
 <script src="js/propaccounts.js"></script>
 <script src="js/analysis.js"></script>

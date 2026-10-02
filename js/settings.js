@@ -20,7 +20,16 @@ const SettingsView = {
       App.el('h3', {}, 'Einstellungen'),
       App.el('div', { class: 'card' }, [
         App.el('h2', {}, 'Darstellung'),
-        App.el('div', { class: 'fab-row', style: 'margin-bottom:0' }, [themeBtn('auto', 'Automatisch'), themeBtn('light', 'Hell'), themeBtn('dark', 'Dunkel')]),
+        App.el('div', { class: 'fab-row' }, [themeBtn('auto', 'Automatisch'), themeBtn('light', 'Hell'), themeBtn('dark', 'Dunkel')]),
+        App.el('div', { class: 'lbl-up', style: 'margin-top:8px' }, 'Farbschema'),
+        App.el('div', { class: 'fab-row', style: 'margin-bottom:0' }, [['warm', 'Warm (neu)'], ['classic', 'Klassisch (vorher)']].map(([key, label]) => App.el('button', {
+          class: 'btn secondary' + (App.currentPalette() === key ? ' selected' : ''),
+          onclick: (e) => {
+            App.applyPalette(key);
+            e.currentTarget.parentElement.querySelectorAll('.btn').forEach((b) => b.classList.remove('selected'));
+            e.currentTarget.classList.add('selected');
+          },
+        }, label))),
       ]),
       this.syncCard(),
       await this.rulesCard(),
@@ -42,7 +51,7 @@ const SettingsView = {
         App.el('p', { class: 'tag' }, 'Alle Daten liegen lokal auf diesem Gerät. Mit dem Backup (.json) kannst du sie sichern oder auf ein anderes Gerät (z. B. PC ↔ Handy) übertragen.'),
         App.el('button', { class: 'btn', style: 'margin-bottom:8px', onclick: () => this.exportFile() }, [App.icon('download'), 'Backup exportieren']),
         App.el('button', { class: 'btn secondary', style: 'margin-bottom:8px', onclick: () => fileInput.click() }, [App.icon('upload'), 'Backup importieren']),
-        App.el('button', { class: 'btn secondary', style: 'margin-bottom:8px', onclick: () => this.exportCsv() }, [App.icon('download'), 'Trades als Tabelle (CSV)']),
+        App.el('button', { class: 'btn secondary', style: 'margin-bottom:8px', onclick: () => this.exportCsv() }, [App.icon('download'), 'Trades als CSV exportieren']),
         App.el('button', { class: 'btn secondary', onclick: () => { App.closeModal(); setTimeout(() => Importer.open(), 340); } }, [App.icon('upload'), 'Trades aus CSV importieren']),
         fileInput,
       ]),

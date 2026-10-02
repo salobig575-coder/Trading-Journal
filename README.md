@@ -74,3 +74,9 @@ Alle Bewegungswerte (`--ease`, `--spring`, `--t-fast/base/slow` = 200/320/440 ms
 - Schrift **Inter lokal** (`fonts/`), keine Google-Abrufe.
 - **Tests**: `tests/index.html` im Browser öffnen (Berechnungen für Winrate, R, Streak, Routine).
 - Entwürfe neuer Trades werden lokal gesichert, Löschen lässt sich per „Rückgängig“ zurücknehmen.
+
+## Farbschema
+
+Alle Farben stehen zentral in `css/palette.css`. Standard ist **Warm** (warme Neutraltöne + Gold, alle Kontraste mindestens WCAG AA). Das vorherige Schema bleibt als **Klassisch** erhalten – Umschalten unter Einstellungen → Darstellung → Farbschema.
+
+`tests/sweep.js` prüft per Konsole (`await __sweep('iPhone 390x844')`) alle Seiten und Dialoge auf Überlauf, abgeschnittene Texte und Fehler.

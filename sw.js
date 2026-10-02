@@ -1,8 +1,9 @@
-const CACHE_NAME = 'trading-journal-v11';
+const CACHE_NAME = 'trading-journal-v13';
 const ASSETS = [
   './',
   './index.html',
   './manifest.json',
+  './css/palette.css',
   './css/style.css',
   './js/icons.js',
   './js/db.js',
@@ -20,6 +21,7 @@ const ASSETS = [
   './fonts/inter-latin-ext.woff2',
   './js/fx.js',
   './js/habits.js',
+  './js/routine.js',
   './js/journal.js',
   './js/propaccounts.js',
   './js/analysis.js',

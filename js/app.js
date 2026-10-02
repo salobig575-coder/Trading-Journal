@@ -43,7 +43,19 @@ const App = {
     window.addEventListener('online', () => this.setOffline(false));
     if (!navigator.onLine) this.setOffline(true);
     this.applyTextScale();
-    document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'visible') this.applyTextScale(); });
+    this._day = this.todayStr();
+    document.addEventListener('visibilitychange', () => {
+      if (document.visibilityState !== 'visible') return;
+      this.applyTextScale();
+      // Tageswechsel bei laufender App: Routine und Startseite springen auf den neuen Tag
+      const d = this.todayStr();
+      if (d !== this._day) { this._day = d; if (typeof RoutineView !== 'undefined') RoutineView.date = null; if (!this.stack.length) this.refresh(); }
+    });
+    document.addEventListener('keydown', (e) => {
+      if (e.key !== 'Escape') return;
+      const sheets = [...document.querySelectorAll('.modal-backdrop')];
+      if (sheets.length) sheets.at(-1).click();
+    });
 
     const hash = location.hash.replace('#', '');
     this.navigate(this.routes[hash] ? hash : 'home', { instant: true });
@@ -383,7 +395,17 @@ const App = {
   // Sheet mit Griff: per Ziehen nach unten schliessbar (wie iOS)
   makeSheet(contentNode, z, dismiss) {
     const backdrop = this.el('div', { class: 'modal-backdrop', style: z ? `z-index:${z}` : '', onclick: (e) => { if (e.target === backdrop) dismiss(); } });
-    const modal = this.el('div', { class: 'modal', role: 'dialog', 'aria-modal': 'true' });
+    const modal = this.el('div', { class: 'modal', role: 'dialog', 'aria-modal': 'true', tabindex: '-1' });
+    backdrop._prevFocus = document.activeElement;
+    modal.addEventListener('keydown', (e) => {
+      if (e.key !== 'Tab') return;
+      const f = [...modal.querySelectorAll('button, [href], input, select, textarea, [tabindex="0"]')].filter((x) => !x.disabled && x.offsetParent !== null);
+      if (!f.length) return;
+      const first = f[0], last = f[f.length - 1];
+      if (e.shiftKey && (document.activeElement === first || document.activeElement === modal)) { e.preventDefault(); last.focus(); }
+      else if (!e.shiftKey && document.activeElement === last) { e.preventDefault(); first.focus(); }
+    });
+    setTimeout(() => { try { modal.focus({ preventScroll: true }); } catch (err) {} }, 60);
     const grab = this.el('div', { class: 'grab', 'aria-hidden': 'true' });
     modal.append(grab, contentNode);
     backdrop.appendChild(modal);
@@ -422,10 +444,11 @@ const App = {
     if (!this._modal) return;
     const m = this._modal;
     this._modal = null;
+    const prev = m._prevFocus;
     if (immediate) { m.remove(); return; }
     m.style.opacity = '';
     m.classList.add('closing');
-    setTimeout(() => m.remove(), 340);
+    setTimeout(() => { m.remove(); try { if (prev && document.body.contains(prev)) prev.focus({ preventScroll: true }); } catch (err) {} }, 340);
   },
 
   // Bestaetigung als Sheet (statt Browser-Dialog)
@@ -496,9 +519,17 @@ const App = {
     if (theme === 'light' || theme === 'dark') document.documentElement.setAttribute('data-theme', theme);
     else { document.documentElement.removeAttribute('data-theme'); theme = 'auto'; }
     try { localStorage.setItem('theme', theme); } catch (e) {}
-    const meta = document.querySelector('meta[name="theme-color"]');
-    if (meta) meta.content = getComputedStyle(document.documentElement).getPropertyValue('--bg').trim() || '#000000';
   },
+
+  // Farbschema: 'warm' (Standard) oder 'classic' (das vorherige Schema)
+  applyPalette(p) {
+    if (p === 'classic') document.documentElement.setAttribute('data-palette', 'classic');
+    else document.documentElement.removeAttribute('data-palette');
+    try { localStorage.setItem('palette', p === 'classic' ? 'classic' : 'warm'); } catch (e) {}
+    const colors = p === 'classic' ? ['#f2f2f7', '#000000'] : ['#f6f3ee', '#0b0a08'];
+    document.querySelectorAll('meta[name="theme-color"]').forEach((m, i) => { m.content = colors[i] || colors[0]; });
+  },
+  currentPalette() { try { return localStorage.getItem('palette') === 'classic' ? 'classic' : 'warm'; } catch (e) { return 'warm'; } },
 
   currentTheme() {
     try { return localStorage.getItem('theme') || 'auto'; } catch (e) { return 'auto'; }

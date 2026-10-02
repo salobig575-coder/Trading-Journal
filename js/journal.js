@@ -303,8 +303,8 @@ const TradeForm = {
       const open = more.style.display === 'none';
       more.style.display = open ? 'block' : 'none';
       if (open) more.style.animation = 'fade .4s var(--ease) both';
-      moreBtn.lastChild.textContent = open ? 'Weniger Felder' : 'Mehr Felder (Macro, Rating, SL/TP, Idee …)';
-    } }, [App.icon('plus'), 'Mehr Felder (Macro, Rating, SL/TP, Idee …)']);
+      moreBtn.lastChild.textContent = open ? 'Weniger Felder' : 'Mehr Felder';
+    } }, [App.icon('plus'), 'Mehr Felder']);
 
     const save = async () => {
       if (!date.value) { App.toast('Bitte ein Datum wählen.'); return; }
@@ -356,7 +356,7 @@ const TradeForm = {
       draftBanner,
       warnCard,
       checkCard,
-      lastTrade ? App.el('button', { class: 'btn secondary', style: 'margin-bottom:16px', onclick: () => { const tpl = TradeForm.templateFrom(lastTrade); App.stack[App.stack.length - 1].render = () => TradeForm.render(null, tpl); App.show({ instant: true }); } }, [App.icon('copy'), 'Setup vom letzten Trade übernehmen']) : null,
+      lastTrade ? App.el('button', { class: 'btn secondary', style: 'margin-bottom:16px', onclick: () => { const tpl = TradeForm.templateFrom(lastTrade); App.stack[App.stack.length - 1].render = () => TradeForm.render(null, tpl); App.show({ instant: true }); } }, [App.icon('copy'), 'Setup vom letzten Trade']) : null,
       card(
         UI.field('Trade', title),
         App.el('div', { class: 'field-grid' }, [UI.field('Datum', App.el('div', {}, [date, dayLbl])), UI.field('R:R (Betrag)', App.el('div', {}, [rr, App.el('div', { class: 'tag', style: 'margin-top:6px' }, 'Vorzeichen folgt dem Ergebnis')]))]),
