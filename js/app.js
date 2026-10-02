@@ -167,6 +167,35 @@ const App = {
     });
   },
 
+  // Installierte Version (aus dem Cache-Namen des Service Workers), z. B. "16"
+  async appVersion() {
+    try {
+      const keys = await caches.keys();
+      const v = keys.map((k) => (k.match(/^trading-journal-v(\d+)$/) || [])[1]).filter(Boolean).map(Number).sort((a, b) => b - a)[0];
+      return v ? String(v) : '';
+    } catch (e) { return ''; }
+  },
+
+  // Manuell auf die neueste Version bringen: neue Version laden, sonst alle Zwischenspeicher leeren und frisch laden.
+  // Deine Daten (Trades, Routine, Einstellungen) bleiben dabei unberuehrt – sie liegen in der Datenbank, nicht im Cache.
+  async forceUpdate() {
+    if (!navigator.onLine) { this.toast('Du bist offline – Aktualisieren geht nur mit Internet.'); return false; }
+    this._updating = true;
+    try {
+      const reg = 'serviceWorker' in navigator ? await navigator.serviceWorker.getRegistration() : null;
+      if (reg) {
+        await reg.update().catch(() => {});
+        // Neue Version noch im Anmarsch? Kurz abwarten, bis sie bereit ist.
+        if (reg.installing) await new Promise((res) => { const w = reg.installing; const t = setTimeout(res, 6000); w.addEventListener('statechange', () => { if (w.state === 'installed' || w.state === 'redundant') { clearTimeout(t); res(); } }); });
+        if (reg.waiting) { reg.waiting.postMessage({ type: 'SKIP_WAITING' }); setTimeout(() => location.reload(), 2500); return true; }   // controllerchange laedt neu
+        await reg.unregister();
+      }
+      if (window.caches) { const keys = await caches.keys(); await Promise.all(keys.map((k) => caches.delete(k))); }
+    } catch (e) { this.logError && this.logError(e.message); }
+    location.reload();
+    return true;
+  },
+
   updateBar(reg) {
     if (document.getElementById('updateBar')) return;
     const bar = this.el('div', { id: 'updateBar', class: 'update-bar' }, [

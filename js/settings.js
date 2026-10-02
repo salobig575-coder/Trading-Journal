@@ -60,6 +60,7 @@ const SettingsView = {
         App.el('button', { class: 'btn secondary', onclick: () => { App.closeModal(); setTimeout(() => Importer.open(), 340); } }, [App.icon('upload'), 'Trades aus CSV importieren']),
         fileInput,
       ]),
+      this.versionCard(),
       App.el('div', { class: 'card' }, [
         App.el('h2', {}, [App.icon('sparkles', 14), 'App installieren']),
         App.el('p', { class: 'tag' }, 'Am Handy: Browser-Menü → „Zum Startbildschirm hinzufügen“ (iPhone: Teilen → Zum Home-Bildschirm). Am PC: Install-Symbol in der Adressleiste.'),
@@ -67,6 +68,19 @@ const SettingsView = {
       App.el('button', { class: 'btn secondary', onclick: () => App.closeModal() }, 'Schließen'),
     ]);
     App.showModal(content);
+  },
+
+  // Version anzeigen und manuell auf die neueste Version aktualisieren
+  versionCard() {
+    const ver = App.el('p', { class: 'tag' }, 'Version wird ermittelt …');
+    App.appVersion().then((v) => { ver.textContent = v ? `Installierte Version: ${v}. Neue Versionen erscheinen automatisch unten als Hinweis – hier kannst du sie auch selbst abholen.` : 'Neue Versionen erscheinen automatisch unten als Hinweis – hier kannst du sie auch selbst abholen.'; });
+    const btn = App.el('button', { class: 'btn secondary', onclick: async () => {
+      btn.disabled = true;
+      btn.replaceChildren(App.el('span', { class: 'spin', style: 'width:16px;height:16px;border-radius:50%;border:2.5px solid currentColor;border-right-color:transparent;display:inline-block;animation:spin .7s linear infinite' }), ' Suche neue Version …');
+      const ok = await App.forceUpdate();
+      if (!ok) { btn.disabled = false; btn.replaceChildren(App.icon('download'), 'Auf neueste Version aktualisieren'); }
+    } }, [App.icon('download'), 'Auf neueste Version aktualisieren']);
+    return App.el('div', { class: 'card' }, [App.el('h2', {}, [App.icon('sparkles', 14), 'App-Version']), ver, btn]);
   },
 
   // Cloud-Sync (Supabase) – rendert sich bei Statuswechsel selbst neu
