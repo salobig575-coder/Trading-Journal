@@ -329,8 +329,8 @@ textarea { resize: vertical; min-height: 96px; line-height: 1.5; }
 @media (hover: hover) { .add-thumb:hover { color: var(--accent); } }
 .add-thumb svg { width: 22px; height: 22px; }
 .img-big { display: block; width: 100%; border-radius: var(--r-md); margin-bottom: var(--s1); cursor: zoom-in; }
-.lightbox { position: fixed; inset: 0; z-index: 120; background: rgba(0, 0, 0, 0.94); display: flex; align-items: center; justify-content: center; animation: fade var(--t-base) var(--ease) both; }
-.lightbox img { max-width: 100%; max-height: 100%; object-fit: contain; touch-action: pan-y; user-select: none; -webkit-user-drag: none; animation: pop var(--t-base) var(--ease) both; }
+.lightbox { position: fixed; inset: 0; z-index: 120; background: rgba(0, 0, 0, 0.94); display: flex; align-items: center; justify-content: center; touch-action: none; animation: fade var(--t-base) var(--ease) both; }
+.lightbox img { max-width: 100%; max-height: 100%; object-fit: contain; touch-action: none; user-select: none; -webkit-user-drag: none; animation: pop var(--t-base) var(--ease) both; }
 .lb-count { position: absolute; top: calc(18px + env(safe-area-inset-top)); left: 50%; transform: translateX(-50%); color: #fff; font-size: var(--fs-sub); font-weight: 600; opacity: 0.8; }
 .lb-x { position: absolute; top: calc(14px + env(safe-area-inset-top)); right: 14px; background: rgba(255, 255, 255, 0.14); border-color: transparent; color: #fff; box-shadow: none; }
 .lb-prev, .lb-next { position: absolute; top: 50%; margin-top: -22px; background: rgba(255, 255, 255, 0.14); border-color: transparent; color: #fff; box-shadow: none; }
@@ -833,3 +833,10 @@ kbd { display: inline-block; min-width: 22px; padding: 2px 7px; border-radius: 7
 @keyframes dictPulse { 0%, 100% { box-shadow: 0 0 0 0 rgba(255, 90, 80, 0.5); } 50% { box-shadow: 0 0 0 9px rgba(255, 90, 80, 0); } }
 .dict-wrap textarea { padding-right: 52px; }
 .ic-badge svg { width: 55%; height: 55%; flex-shrink: 0; }
+
+/* Herunterziehen zum Aktualisieren */
+.ptr { position: fixed; z-index: 60; top: calc(env(safe-area-inset-top) + 12px); left: 50%; width: 36px; height: 36px; border-radius: 50%; background: var(--surface); box-shadow: var(--shadow); border: var(--hair) solid var(--line); display: flex; align-items: center; justify-content: center; opacity: 0; pointer-events: none; transform: translate(-50%, -44px); }
+.ptr-ring { width: 18px; height: 18px; border-radius: 50%; border: 2.5px solid var(--raise); border-top-color: var(--accent); transition: border-color var(--t-fast); }
+.ptr.ready .ptr-ring { border-color: var(--accent); border-right-color: transparent; }
+.ptr.spin .ptr-ring { animation: spin 0.7s linear infinite; }
+.ptr.done .ptr-ring { border-color: var(--win); animation: pop var(--t-base) var(--spring) both; }

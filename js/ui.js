@@ -241,13 +241,29 @@ const UI = {
       list.length > 1 ? App.el('button', { class: 'round-btn lb-prev', html: Icons.chevronLeft(), onclick: (e) => { e.stopPropagation(); go(-1); } }) : null,
       list.length > 1 ? App.el('button', { class: 'round-btn lb-next', html: Icons.chevronRight(), onclick: (e) => { e.stopPropagation(); go(1); } }) : null,
     ]);
-    box.addEventListener('pointerdown', (e) => { x0 = e.clientX; });
+    // Wischen: links/rechts = naechstes Bild, nach oben/unten = schliessen (Bild folgt dem Finger)
+    let y0 = null, t0 = 0;
+    const settle = () => { img.style.transition = 'transform var(--t-base) var(--spring)'; img.style.transform = ''; box.style.background = ''; };
+    box.addEventListener('pointerdown', (e) => { x0 = e.clientX; y0 = e.clientY; t0 = performance.now(); img.style.transition = 'none'; });
+    box.addEventListener('pointermove', (e) => {
+      if (x0 === null) return;
+      const dx = e.clientX - x0, dy = e.clientY - y0;
+      if (Math.abs(dy) > Math.abs(dx) && Math.abs(dy) > 8) {
+        img.style.animation = 'none';
+        img.style.transform = `translateY(${dy}px) scale(${1 - Math.min(Math.abs(dy) / 1200, 0.15)})`;
+        box.style.background = `rgba(0, 0, 0, ${0.94 * (1 - Math.min(Math.abs(dy) / 360, 0.8))})`;
+      }
+    });
     box.addEventListener('pointerup', (e) => {
       if (x0 === null) return;
-      const dx = e.clientX - x0; x0 = null;
-      if (Math.abs(dx) > 50) go(dx < 0 ? 1 : -1);
-      else if (e.target === box) close();
+      const dx = e.clientX - x0, dy = e.clientY - y0; x0 = null;
+      const fast = Math.abs(dy) / Math.max(1, performance.now() - t0) > 0.6;
+      if (Math.abs(dy) > Math.abs(dx) && (Math.abs(dy) > 110 || (fast && Math.abs(dy) > 40))) { close(); return; }
+      settle();
+      if (Math.abs(dx) > 50 && Math.abs(dx) > Math.abs(dy)) go(dx < 0 ? 1 : -1);
+      else if (e.target === box && Math.abs(dx) < 8 && Math.abs(dy) < 8) close();
     });
+    box.addEventListener('pointercancel', () => { x0 = null; settle(); });
     document.addEventListener('keydown', onKey);
     document.body.appendChild(box);
     show(0);

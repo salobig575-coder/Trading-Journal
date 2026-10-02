@@ -449,13 +449,34 @@ const App = {
     modal.append(grab, contentNode);
     backdrop.appendChild(modal);
     let y0 = null, dy = 0, t0 = 0;
-    grab.addEventListener('pointerdown', (e) => { y0 = e.clientY; dy = 0; t0 = performance.now(); modal.style.animation = 'none'; modal.style.transition = 'none'; try { grab.setPointerCapture(e.pointerId); } catch (err) {} });
-    grab.addEventListener('pointermove', (e) => {
-      if (y0 === null) return;
-      dy = Math.max(0, e.clientY - y0);
+    const begin = (y) => { y0 = y; dy = 0; t0 = performance.now(); modal.style.animation = 'none'; modal.style.transition = 'none'; };
+    const dragTo = (y) => {
+      dy = Math.max(0, y - y0);
       modal.style.transform = `translateY(${dy}px)`;
       backdrop.style.opacity = String(1 - Math.min(0.7, dy / 420));
-    });
+    };
+    grab.addEventListener('pointerdown', (e) => { begin(e.clientY); try { grab.setPointerCapture(e.pointerId); } catch (err) {} });
+    grab.addEventListener('pointermove', (e) => { if (y0 !== null) dragTo(e.clientY); });
+    // Auf dem Handy: von ueberall im Sheet nach unten wischen, solange der Inhalt ganz oben steht
+    let ts = null;
+    modal.addEventListener('touchstart', (e) => {
+      ts = null;
+      if (e.touches.length !== 1 || e.target.closest('textarea, input, select, canvas, [data-noswipe]')) return;
+      ts = { x: e.touches[0].clientX, y: e.touches[0].clientY, on: false };
+    }, { passive: true });
+    modal.addEventListener('touchmove', (e) => {
+      if (!ts) return;
+      const t = e.touches[0], mx = t.clientX - ts.x, my = t.clientY - ts.y;
+      if (!ts.on) {
+        if (Math.abs(mx) < 8 && Math.abs(my) < 8) return;
+        if (my > 0 && Math.abs(my) > Math.abs(mx) * 1.2 && modal.scrollTop <= 0) { ts.on = true; begin(t.clientY - my); }
+        else { ts = null; return; }
+      }
+      if (e.cancelable) e.preventDefault();
+      dragTo(t.clientY);
+    }, { passive: false });
+    modal.addEventListener('touchend', () => { if (ts && ts.on) end(); ts = null; }, { passive: true });
+    modal.addEventListener('touchcancel', () => { if (ts && ts.on) end(); ts = null; }, { passive: true });
     const end = () => {
       if (y0 === null) return;
       const fast = dy / Math.max(1, performance.now() - t0) > 0.6;

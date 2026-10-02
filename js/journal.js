@@ -362,7 +362,7 @@ const TradeForm = {
       account: (accounts.find((a) => a.name === f.account.get()) || {}).id || '', slPoints: sl.value, tpPoints: tp.value,
     });
     const draftBanner = draft && draft.fields ? App.el('div', { class: 'card', style: 'padding:var(--s2) var(--s3)' }, [
-      App.el('div', { class: 'row between' }, [
+      App.el('div', { class: 'row between', style: 'flex-wrap:wrap;gap:12px' }, [
         App.el('div', {}, [App.el('div', { style: 'font-weight:600' }, 'Entwurf wiederhergestellt'), App.el('div', { class: 'tag' }, `Gespeichert um ${new Date(draft.at).toLocaleTimeString('de-DE', { hour: '2-digit', minute: '2-digit' })} Uhr`)]),
         App.el('button', { class: 'btn small secondary', onclick: () => { try { localStorage.removeItem(DRAFT_KEY); } catch (e) {} draft = null; App.stack[App.stack.length - 1].render = () => TradeForm.render(null); App.show({ instant: true, dir: 'fade' }); } }, 'Verwerfen'),
       ]),
