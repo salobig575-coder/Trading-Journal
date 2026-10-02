@@ -3,10 +3,15 @@
 
 // Anlegen / Entfernen (mit Rueckgaengig) – gemeinsam fuer alle Dialoge
 Object.assign(Habits, {
-  async add(name, xp, parentId) {
+  // Alle bestehenden Gewohnheiten eines Tages (auch wenn sie dort nicht faellig sind) – fuer die Bearbeiten-Ansicht
+  topLevelAll(date) { return this.existingOn(date).filter((h) => !h.parentId); },
+  childrenAll(pid, date) { return this.existingOn(date).filter((h) => h.parentId === pid); },
+
+  async add(name, xp, parentId, schedule) {
     const order = this.habits.reduce((m, x) => Math.max(m, x.order || 0), 0) + 1;
     const rec = { id: DB.uid(), name: name.trim(), xp: Math.max(1, Math.min(10, xp || 3)), order, createdDate: App.todayStr() };
     if (parentId) rec.parentId = parentId;
+    if (schedule && schedule.type !== 'daily') rec.schedule = schedule;
     await DB.put('habits', rec);
     this.habits.push(rec);
     return rec;
@@ -20,6 +25,37 @@ Object.assign(Habits, {
     return async () => { for (const x of affected) { delete x.archivedDate; await DB.put('habits', x); } };
   },
 });
+
+// Rhythmus-Auswahl: taeglich, bestimmte Wochentage oder alle N Tage. node.get() liefert das schedule-Objekt.
+function scheduleField(init) {
+  const s0 = init || { type: 'daily' };
+  let type = s0.type || 'daily', days = (s0.days || [0, 2, 4]).slice(), every = s0.every || 2;
+  const anchor = s0.type === 'interval' && s0.anchor ? s0.anchor : App.todayStr();
+  const labels = { daily: 'Täglich', weekdays: 'Wochentage', interval: 'Alle paar Tage' };
+  const names = ['Mo', 'Di', 'Mi', 'Do', 'Fr', 'Sa', 'So'];
+  const wrap = App.el('div');
+  const body = App.el('div', { style: 'margin-top:var(--s2)' });
+  const typeChips = UI.chips(Object.values(labels), labels[type], { deselect: false, onChange: (v) => { type = Object.keys(labels).find((k) => labels[k] === v) || 'daily'; draw(); } });
+  const draw = () => {
+    body.innerHTML = '';
+    if (type === 'weekdays') {
+      body.appendChild(UI.chips(names, days.map((d) => names[d]), { multi: true, onChange: (v) => { days = v.map((n) => names.indexOf(n)).sort(); } }));
+      body.appendChild(App.el('div', { class: 'help-hint' }, 'An diesen Tagen erscheint die Gewohnheit, an den anderen ist Ruhetag.'));
+    } else if (type === 'interval') {
+      const val = App.el('b', {}, String(every));
+      const note = App.el('div', { class: 'help-hint' });
+      const upd = () => { val.textContent = every; note.textContent = `Alle ${every} Tage, gezählt ab ${App.formatDate(anchor)}.`; };
+      const step = (n) => () => { every = Math.max(2, Math.min(30, every + n)); upd(); };
+      body.appendChild(App.el('div', { class: 'row', style: 'gap:12px' }, [App.el('span', {}, 'Alle'), App.el('div', { class: 'stepper' }, [App.el('button', { 'aria-label': 'Weniger', onclick: step(-1) }, '−'), val, App.el('button', { 'aria-label': 'Mehr', onclick: step(1) }, '+')]), App.el('span', {}, 'Tage')]));
+      body.appendChild(note);
+      upd();
+    } else body.appendChild(App.el('div', { class: 'help-hint' }, 'Jeden Tag. Sa und So zählen nach deiner Wochenend-Einstellung.'));
+  };
+  draw();
+  wrap.append(typeChips, body);
+  wrap.get = () => (type === 'weekdays' ? { type, days: days.slice() } : type === 'interval' ? { type, every, anchor } : { type: 'daily' });
+  return wrap;
+}
 
 const ROUTINE_IDEAS = ['Pre-Market-Analyse', 'Journal schreiben', 'Gym / Bewegung', '10 Min Meditation', 'Lesen (20 Min)', 'Wasser trinken (2 L)'];
 
@@ -92,6 +128,8 @@ const RoutineView = {
       setTimeout(() => { App.refresh(); App.undoToast(`„${h.name}“ gelöscht`, undo); }, 300);
     };
 
+    const scheduled = (h) => !!(h.schedule && h.schedule.type !== 'daily');
+
     // Zeile im Ansichtsmodus: ganze Zeile antippen = abhaken
     const viewRow = (h, isChild) => {
       const done = Habits.isDone(date, h.id);
@@ -100,7 +138,7 @@ const RoutineView = {
         class: 'habit' + (isChild ? ' child' : '') + (done ? ' done' : '') + (this.justAdded === h.id ? ' fresh' : ''),
         'aria-pressed': String(done), 'aria-label': h.name,
         onclick: () => onToggle(h, row, cb, isChild),
-      }, [cb, App.el('div', { class: 'nm' }, h.name), App.el('div', { class: 'xp' }, `+${h.xp} XP`)]);
+      }, [cb, App.el('div', { class: 'nm' }, [h.name, scheduled(h) ? App.el('span', { class: 'sched' }, Habits.scheduleLabel(h)) : null]), App.el('div', { class: 'xp' }, `+${h.xp} XP`)]);
       row._habit = h;
       return row;
     };
@@ -123,6 +161,10 @@ const RoutineView = {
           App.el('div', { class: 'row', style: 'gap:8px' }, [App.el('span', { class: 'tag' }, 'XP'), App.el('div', { class: 'stepper' }, [App.el('button', { 'aria-label': 'Weniger XP', onclick: step(-1) }, '−'), val, App.el('button', { 'aria-label': 'Mehr XP', onclick: step(1) }, '+')])]),
           isChild ? null : App.el('button', { class: 'text-btn', onclick: () => this.addSheet(h.id) }, '+ Unterpunkt'),
         ]),
+        App.el('div', { class: 'he-line sub' }, [
+          App.el('span', { class: 'tag' }, 'Rhythmus'),
+          App.el('button', { class: 'text-btn', 'aria-label': `Rhythmus von „${h.name}“ ändern`, onclick: () => this.scheduleSheet(h) }, Habits.scheduleLabel(h)),
+        ]),
       );
       return row;
     };
@@ -131,14 +173,16 @@ const RoutineView = {
       App.el('div', { class: 'list-title' }, editing ? 'Bearbeiten' : 'Gewohnheiten'),
       App.el('button', { class: 'btn small secondary', onclick: () => { this.editing = !editing; App.refresh(); } }, [App.icon(editing ? 'check' : 'edit', 14), editing ? 'Fertig' : 'Bearbeiten']),
     ]));
-    const tops = Habits.topLevel(date);
-    if (!tops.length) listCard.appendChild(App.el('div', { class: 'tag', style: 'padding:var(--s2) 0;text-align:center' }, 'An diesem Tag gab es noch keine Gewohnheiten.'));
+    // Bearbeiten zeigt alle Gewohnheiten (auch die, die heute nicht faellig sind), Ansicht nur die faelligen
+    const tops = editing ? Habits.topLevelAll(date) : Habits.topLevel(date);
+    const kidsOf = (id) => (editing ? Habits.childrenAll(id, date) : Habits.childrenOf(id, date));
+    if (!tops.length) listCard.appendChild(App.el('div', { class: 'tag', style: 'padding:var(--s2) 0;text-align:center' }, Habits.day(date).rest ? 'Heute ist nichts geplant – genieß den Ruhetag.' : 'An diesem Tag gab es noch keine Gewohnheiten.'));
     const groups = App.el('div', { class: 'habit-groups' });
     tops.forEach((h) => {
       const group = App.el('div', { class: 'habit-group' });
       group._habit = h;
       group.appendChild(editing ? editRow(h, false) : viewRow(h, false));
-      const kids = Habits.childrenOf(h.id, date);
+      const kids = kidsOf(h.id);
       if (kids.length) {
         const inner = App.el('div', { class: 'inner' }, kids.map((k) => (editing ? editRow(k, true) : viewRow(k, true))));
         const box = App.el('div', { class: 'habit-kids' + (editing || Habits.isDone(date, h.id) ? ' open' : '') }, [inner]);
@@ -162,9 +206,9 @@ const RoutineView = {
     const drawSummary = () => {
       const s = Habits.day(date);
       ring.set(s.pct);
-      pctEl.textContent = Math.round(s.pct * 100) + '%';
-      doneEl.textContent = s.count ? `${s.doneCount} von ${s.count} erledigt` : '–';
-      subEl.textContent = caption(s);
+      pctEl.textContent = s.rest ? '–' : Math.round(s.pct * 100) + '%';
+      doneEl.textContent = s.rest ? 'Ruhetag' : s.count ? `${s.doneCount} von ${s.count} erledigt` : '–';
+      subEl.textContent = s.rest ? 'Heute ist nichts geplant.' : caption(s);
       xpEl.textContent = s.count ? `${s.earned} von ${s.max} XP` : '';
       const st = Habits.streak(today);
       streakChip.querySelector('.sv').textContent = st === 1 ? '1 Tag in Folge' : `${st} Tage in Folge`;
@@ -194,8 +238,8 @@ const RoutineView = {
         const radius = 15, c = 2 * Math.PI * radius;
         const wd = (App.parseDate(d).getDay() + 6) % 7;
         strip.appendChild(App.el('div', {
-          class: 'wk-day' + (off ? ' off' : '') + (d === date ? ' sel' : '') + (d === today ? ' today' : '') + (s.complete ? ' full' : '') + (future ? ' future' : ''),
-          'aria-label': `${names[wd]} ${App.parseDate(d).getDate()}. – ${future ? 'liegt in der Zukunft' : Math.round(s.pct * 100) + ' Prozent erledigt'}`,
+          class: 'wk-day' + (off ? ' off' : '') + (s.rest && !off ? ' rest' : '') + (d === date ? ' sel' : '') + (d === today ? ' today' : '') + (s.complete ? ' full' : '') + (future ? ' future' : ''),
+          'aria-label': `${names[wd]} ${App.parseDate(d).getDate()}. – ${future ? 'liegt in der Zukunft' : s.rest ? 'Ruhetag' : Math.round(s.pct * 100) + ' Prozent erledigt'}`,
           onclick: () => { if (future || d === date) return; this.date = d; this.month = null; App.refresh(); },
         }, [
           App.el('div', {}, ['M', 'D', 'M', 'D', 'F', 'S', 'S'][wd]),
@@ -228,7 +272,7 @@ const RoutineView = {
         const s = Habits.day(d);
         const off = !Habits.scored(d);
         const lvl = d > today ? 0 : s.pct;
-        const cell = App.el('div', { class: 'heat-d' + (off ? ' off' : '') + (d === today ? ' today' : '') + (s.complete ? ' full' : '') }, String(Number(d.slice(8))));
+        const cell = App.el('div', { class: 'heat-d' + (off ? ' off' : '') + (s.rest && !off ? ' rest' : '') + (d === today ? ' today' : '') + (s.complete ? ' full' : '') }, String(Number(d.slice(8))));
         if (!off && lvl > 0) cell.style.background = `color-mix(in srgb, var(--accent) ${Math.round(18 + lvl * 82)}%, var(--fill))`;
         grid.appendChild(cell);
       });
@@ -265,6 +309,26 @@ const RoutineView = {
     return wrap;
   },
 
+  // Rhythmus einer bestehenden Gewohnheit aendern
+  scheduleSheet(h) {
+    const field = scheduleField(h.schedule);
+    const save = async () => {
+      const s = field.get();
+      if (s.type === 'weekdays' && !s.days.length) { App.toast('Wähle mindestens einen Wochentag.'); return; }
+      if (s.type === 'daily') delete h.schedule; else h.schedule = s;
+      await DB.put('habits', h);
+      App.closeModal();
+      App.refresh();
+      App.success('Rhythmus gespeichert');
+    };
+    App.showModal(App.el('div', {}, [
+      App.el('h3', {}, 'Rhythmus'),
+      App.el('p', { class: 'tag', style: 'margin:0 0 var(--s2)' }, `„${h.name}“`),
+      field,
+      App.el('div', { class: 'btn-row', style: 'margin-top:var(--s3)' }, [App.el('button', { class: 'btn secondary', onclick: () => App.closeModal() }, 'Abbrechen'), App.el('button', { class: 'btn', onclick: save }, 'Speichern')]),
+    ]));
+  },
+
   // Neue Gewohnheit (oder Unterpunkt): Name, Gewicht, optionale Zuordnung
   addSheet(parentId) {
     const taken = new Set(Habits.habits.filter((h) => !h.archivedDate).map((h) => h.name.toLowerCase()));
@@ -275,11 +339,14 @@ const RoutineView = {
     const parentChips = UI.chips(parents.map((h) => h.name), (parents.find((h) => h.id === parentId) || {}).name || '', { onChange: (v) => { xp = v ? 1 : 3; val.textContent = xp; } });
     const name = App.el('input', { type: 'text', placeholder: 'z. B. 10 Min Meditation', maxlength: '60', 'aria-label': 'Name' });
     const step = (n) => () => { xp = Math.max(1, Math.min(10, xp + n)); val.textContent = xp; };
+    const schedule = scheduleField();
     const save = async () => {
       const t = name.value.trim();
       if (!t) { App.toast('Gib deiner Gewohnheit einen Namen.'); name.focus(); return; }
       const parent = parents.find((h) => h.name === parentChips.get());
-      const rec = await Habits.add(t, xp, parent && parent.id);
+      const sched = schedule.get();
+      if (sched.type === 'weekdays' && !sched.days.length) { App.toast('Wähle mindestens einen Wochentag.'); return; }
+      const rec = await Habits.add(t, xp, parent && parent.id, sched);
       this.justAdded = rec.id;
       App.closeModal();
       App.refresh();
@@ -292,6 +359,7 @@ const RoutineView = {
       ideas.length ? App.el('div', { class: 'field' }, [App.el('label', {}, 'Ideen'), App.el('div', { class: 'chip-group' }, ideas.slice(0, 8).map((i) => App.el('button', { class: 'chip sm', onclick: () => { name.value = i; name.focus(); } }, i)))]) : null,
       parents.length ? App.el('div', { class: 'field' }, [App.el('label', {}, 'Gehört zu (erscheint, sobald diese erledigt ist)'), parentChips]) : null,
       App.el('div', { class: 'field' }, [App.el('label', {}, 'Gewicht (XP) – wie wichtig ist sie?'), App.el('div', { class: 'stepper' }, [App.el('button', { 'aria-label': 'Weniger XP', onclick: step(-1) }, '−'), val, App.el('button', { 'aria-label': 'Mehr XP', onclick: step(1) }, '+')])]),
+      App.el('div', { class: 'field' }, [App.el('label', {}, 'Rhythmus'), schedule]),
       App.el('div', { class: 'btn-row' }, [App.el('button', { class: 'btn secondary', onclick: () => App.closeModal() }, 'Abbrechen'), App.el('button', { class: 'btn', onclick: save }, [App.icon('plus'), 'Hinzufügen'])]),
     ]));
     setTimeout(() => name.focus(), 380);

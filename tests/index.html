@@ -70,6 +70,30 @@ Habits.logs.delete(Habits.logId('2026-01-07', 'b'));
 eq('Streak bricht bei verpasstem Tag', Habits.streak('2026-01-12'), 3);
 eq('Bester Streak ≥ 3', Habits.best() >= 3, true);
 
+// ---- Rhythmus ----
+Habits.logs = new Map(); Habits.weekend = false;
+Habits.habits = [{ id: 't', name: 'Do', xp: 3, order: 1, createdDate: '2026-01-05', schedule: { type: 'weekdays', days: [3] } }];
+eq('Rhythmus: Donnerstag faellig', Habits.appliesOn(Habits.habits[0], '2026-01-08'), true);
+eq('Rhythmus: Mittwoch nicht faellig', Habits.appliesOn(Habits.habits[0], '2026-01-07'), false);
+eq('Ruhetag erkannt', Habits.day('2026-01-06').rest, true);
+eq('Ruhetag: 0 XP moeglich', Habits.day('2026-01-06').max, 0);
+eq('Faelliger Tag ist kein Ruhetag', Habits.day('2026-01-08').rest, false);
+eq('Vor der ersten Gewohnheit kein Ruhetag', Habits.day('2026-01-02').rest, false);
+done('2026-01-08', 't');
+eq('Woche perfekt trotz Ruhetagen', Habits.range(Habits.weekDates('2026-01-07')).complete, true);
+eq('Streak ueberspringt Ruhetage', Habits.streak('2026-01-12'), 1);
+eq('Ruhetag heute bricht Streak nicht', Habits.streak('2026-01-13'), 1);
+Habits.habits = [{ id: 'i', name: 'Alle 2', xp: 2, order: 1, createdDate: '2026-01-05', schedule: { type: 'interval', every: 2, anchor: '2026-01-05' } }];
+eq('Intervall: Starttag faellig', Habits.appliesOn(Habits.habits[0], '2026-01-05'), true);
+eq('Intervall: Folgetag frei', Habits.appliesOn(Habits.habits[0], '2026-01-06'), false);
+eq('Intervall: uebernaechster Tag faellig', Habits.appliesOn(Habits.habits[0], '2026-01-07'), true);
+eq('Intervall: vor dem Start nicht faellig', Habits.appliesOn(Habits.habits[0], '2026-01-03'), false);
+eq('Label: Wochentage', Habits.scheduleLabel({ schedule: { type: 'weekdays', days: [0, 2, 4] } }), 'Mo, Mi, Fr');
+eq('Label: Mo–Fr', Habits.scheduleLabel({ schedule: { type: 'weekdays', days: [0, 1, 2, 3, 4] } }), 'Mo–Fr');
+eq('Label: Intervall', Habits.scheduleLabel({ schedule: { type: 'interval', every: 3 } }), 'Alle 3 Tage');
+eq('Label: Standard taeglich', Habits.scheduleLabel({}), 'Täglich');
+eq('Ohne Rhythmus jeden Tag faellig', Habits.appliesOn({ createdDate: '2026-01-01' }, '2026-02-10'), true);
+
 document.getElementById('sum').textContent = `${pass} bestanden, ${fail} fehlgeschlagen`;
 document.getElementById('sum').className = fail ? 'bad' : 'ok';
 window.__testResult = { pass, fail };

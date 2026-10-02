@@ -112,7 +112,7 @@ const JournalView = {
         const cover = this.firstImage(t);
         const r = Calc.rValue(t);
         g.appendChild(App.el('div', { class: 'g-card', onclick: () => TradeDetail.open(t) }, [
-          App.el('div', { class: 'g-cover', style: cover ? `background-image:url(${cover})` : '' }, cover ? '' : (t.pair || '·')),
+          (() => { const c = App.el('div', { class: 'g-cover' }, t.pair || '·'); if (cover) Img.fillBg(c, cover, t.pair || '·'); return c; })(),
           App.el('div', { class: 'g-body' }, [
             App.el('div', { class: 'tt' }, t.trade || t.pair || 'Trade'),
             App.el('div', { class: 'item-meta' }, `${App.formatDate(t.date)}${t.ls ? ' · ' + t.ls : ''}`),
@@ -177,7 +177,7 @@ const TradeDetail = {
 
     const cover = JournalView.firstImage(t);
     const content = App.el('div', {}, [
-      cover ? App.el('img', { src: cover, alt: '', style: 'width:100%;aspect-ratio:16/10;object-fit:cover;border-radius:18px;margin-bottom:16px;cursor:zoom-in', onclick: () => UI.lightbox(cover) }) : null,
+      cover ? (() => { const im = App.el('img', { alt: '', class: 'cover-img', onclick: () => UI.lightbox([cover]) }); Img.fill(im, cover); return im; })() : null,
       App.el('h3', {}, t.trade || t.pair || 'Trade'),
       grid, ...texts, ...imgs,
       App.el('div', { class: 'btn-row wrap' }, [

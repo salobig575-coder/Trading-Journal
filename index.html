@@ -80,6 +80,10 @@
 </div>
 
 <nav class="dock" aria-label="Hauptnavigation">
+  <div class="side-brand" aria-hidden="true">
+    <span class="side-logo"><img class="logo-l" src="icons/logo-light.svg" alt="" width="36" height="36"><img class="logo-d" src="icons/logo-dark.svg" alt="" width="36" height="36"></span>
+    <span class="side-name">Trading <span>Journal</span></span>
+  </div>
   <div class="dock-in">
     <button class="tab" data-route="home"><span class="ic"></span>Heute</button>
     <button class="tab" data-route="journal"><span class="ic"></span>Journal</button>
@@ -87,6 +91,7 @@
     <button class="tab" data-route="routine"><span class="ic"></span>Routine</button>
     <button class="tab" data-route="stats"><span class="ic"></span>Statistik</button>
   </div>
+  <div class="side-hint" aria-hidden="true"><kbd>?</kbd> Tastenkürzel</div>
 </nav>
 
 <script src="js/icons.js"></script>
@@ -113,6 +118,7 @@
 <script src="js/importer.js"></script>
 <script src="js/settings.js"></script>
 <script src="js/sync.js"></script>
+<script src="js/shortcuts.js"></script>
 <script>
   App.init();
 </script>

@@ -28,6 +28,7 @@ const Icons = {
   image() { return this.wrap('<rect x="3.5" y="4.5" width="17" height="15" rx="2.2"/><circle cx="9" cy="10" r="1.6"/><path d="m4 17 5-4.5 4 3.5 3-2.5 4 3.5"/>'); },
   download() { return this.wrap('<path d="M12 3.5v11"/><path d="m7.5 10.5 4.5 4.5 4.5-4.5"/><path d="M5 18.5h14"/>'); },
   upload() { return this.wrap('<path d="M12 15.5v-11"/><path d="m7.5 8.5 4.5-4.5 4.5 4.5"/><path d="M5 18.5h14"/>'); },
+  keyboard() { return this.wrap('<rect x="3" y="6" width="18" height="12" rx="3"/><path d="M7 10h.01M11 10h.01M15 10h.01M7 14h10"/>'); },
   sparkles() { return this.wrap('<path d="M12 3.5 13.4 8 18 9.4 13.4 10.8 12 15.3 10.6 10.8 6 9.4l4.6-1.4Z"/><path d="M18.5 15.5 19.2 17.6 21.2 18.3 19.2 19 18.5 21 17.8 19 15.8 18.3 17.8 17.6Z"/>'); },
   calendar() { return this.wrap('<rect x="4" y="5" width="16" height="15" rx="2.2"/><path d="M4 9.5h16"/><path d="M8.3 3.2v3.6M15.7 3.2v3.6"/>'); },
   grid() { return this.wrap('<rect x="4" y="4" width="6.5" height="6.5" rx="1.4"/><rect x="13.5" y="4" width="6.5" height="6.5" rx="1.4"/><rect x="4" y="13.5" width="6.5" height="6.5" rx="1.4"/><rect x="13.5" y="13.5" width="6.5" height="6.5" rx="1.4"/>'); },

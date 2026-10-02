@@ -1,3 +1,85 @@
+// Bilder liegen in einem eigenen Speicher ("images"), Trades/Analysen enthalten nur Verweise ("img:…").
+// Dadurch bleiben Listen schnell, und der Cloud-Abgleich schickt Bilder einzeln statt mit jedem Trade.
+// Aeltere Eintraege mit eingebetteten Bildern (data:-URLs) funktionieren weiter und werden im Hintergrund umgezogen.
+const Img = {
+  cache: new Map(),
+  isRef(v) { return typeof v === 'string' && v.startsWith('img:'); },
+
+  remember(id, data) {
+    this.cache.set(id, data);
+    if (this.cache.size > 24) this.cache.delete(this.cache.keys().next().value);
+  },
+
+  async save(dataUrl) {
+    const id = 'img:' + DB.uid();
+    await DB.put('images', { id, data: dataUrl, createdAt: Date.now() });
+    this.remember(id, dataUrl);
+    return id;
+  },
+
+  async get(ref) {
+    if (!this.isRef(ref)) return ref || '';
+    if (this.cache.has(ref)) return this.cache.get(ref);
+    const rec = await DB.get('images', ref);
+    const data = (rec && rec.data) || '';
+    if (data) this.remember(ref, data);
+    return data;
+  },
+
+  async getMany(list) { return Promise.all((list || []).map((r) => this.get(r))); },
+
+  // Bild-Element fuellen; fehlt das Bild noch (z. B. Cloud-Abgleich laeuft), bleibt ein ruhiger Platzhalter
+  fill(el, ref, retries = 3) {
+    el.classList.add('img-loading');
+    this.get(ref).then((d) => {
+      if (d) { el.src = d; el.classList.remove('img-loading'); }
+      else if (retries > 0) setTimeout(() => this.fill(el, ref, retries - 1), 2500);
+    });
+  },
+  fillBg(el, ref, label) {
+    this.get(ref).then((d) => { if (d) { el.style.backgroundImage = `url("${d}")`; el.textContent = ''; } else if (label) el.textContent = label; });
+  },
+
+  // Einmalig: eingebettete Bilder aus Trades und Analysen in den Bilder-Speicher verschieben
+  async migrate() {
+    if (await DB.getSetting('imgMigrated', false)) return;
+    for (const store of ['trades', 'analyses']) {
+      for (const rec of await DB.getAll(store)) {
+        const imgs = rec.images || {};
+        let changed = false;
+        for (const key of Object.keys(imgs)) {
+          if (!Array.isArray(imgs[key])) continue;
+          const next = [];
+          for (const v of imgs[key]) {
+            if (typeof v === 'string' && v.startsWith('data:')) { next.push(await this.save(v)); changed = true; } else next.push(v);
+          }
+          imgs[key] = next;
+        }
+        if (changed) await DB.put(store, rec);
+      }
+    }
+    await DB.putRaw('settings', { key: 'imgMigrated', value: true });
+  },
+
+  // Nicht mehr verwendete Bilder (aelter als 7 Tage) entfernen, hoechstens einmal pro Tag
+  async gc() {
+    try {
+      const last = Number(localStorage.getItem('tj_img_gc') || 0);
+      if (Date.now() - last < 86400000) return;
+      const used = new Set();
+      for (const store of ['trades', 'analyses']) {
+        for (const rec of await DB.getAll(store)) Object.values(rec.images || {}).forEach((l) => (l || []).forEach((r) => used.add(r)));
+      }
+      for (const id of await DB.keys('images')) {
+        if (used.has(id)) continue;
+        const rec = await DB.get('images', id);
+        if (rec && Date.now() - (rec.createdAt || 0) > 7 * 86400000) { await DB.delete('images', id); this.cache.delete(id); }
+      }
+      localStorage.setItem('tj_img_gc', String(Date.now()));
+    } catch (e) { console.warn(e); }
+  },
+};
+
 // Wiederverwendbare Formular-Bausteine
 const UI = {
   field(label, node) {
@@ -72,7 +154,7 @@ const UI = {
     const addFiles = async (files) => {
       let n = 0;
       for (const f of files) {
-        try { list.push(await UI.compressImage(f)); n++; } catch (e) { App.toast('Dieses Bild konnte nicht geladen werden.'); }
+        try { list.push(await Img.save(await UI.compressImage(f))); n++; } catch (e) { App.toast('Dieses Bild konnte nicht geladen werden.'); }
       }
       if (n) draw();
     };
@@ -98,7 +180,7 @@ const UI = {
       wrap.innerHTML = '';
       list.forEach((src, i) => {
         wrap.appendChild(App.el('div', { class: 'thumb', onclick: () => UI.lightbox(list, i) }, [
-          App.el('img', { src, alt: '' }),
+          (() => { const im = App.el('img', { alt: '' }); Img.fill(im, src); return im; })(),
           App.el('button', { type: 'button', class: 'x', html: Icons.close(), onclick: (e) => { e.stopPropagation(); list.splice(i, 1); draw(); } }),
         ]));
       });
@@ -112,8 +194,10 @@ const UI = {
   },
 
   // Vollbild-Ansicht; bei mehreren Bildern mit Wischen / Pfeiltasten
-  lightbox(src, start = 0) {
-    const list = Array.isArray(src) ? src : [src];
+  async lightbox(src, start = 0) {
+    const refs = (Array.isArray(src) ? src : [src]).filter(Boolean);
+    const list = (await Img.getMany(refs)).filter(Boolean);
+    if (!list.length) { App.toast('Das Bild ist noch nicht geladen.'); return; }
     let i = Math.max(0, Math.min(list.length - 1, start));
     const img = App.el('img', { alt: '' });
     const counter = App.el('div', { class: 'lb-count' });
@@ -146,7 +230,7 @@ const UI = {
   },
 
   imageViewer(images) {
-    return App.el('div', {}, (images || []).map((src, i) => App.el('img', { class: 'img-big', src, alt: '', onclick: () => UI.lightbox(images, i) })));
+    return App.el('div', {}, (images || []).map((src, i) => { const im = App.el('img', { class: 'img-big', alt: '', onclick: () => UI.lightbox(images, i) }); Img.fill(im, src); return im; }));
   },
 
   // Sortierbare Liste per Ziehen am Griff. opts: { item, handle, onDone(elements) }

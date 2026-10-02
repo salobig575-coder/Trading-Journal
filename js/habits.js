@@ -28,8 +28,45 @@ const Habits = {
   logId(date, hid) { return `${date}|${hid}`; },
   isDone(date, hid) { const l = this.logs.get(this.logId(date, hid)); return !!(l && l.done); },
 
-  activeOn(date) {
+  // Bestehende (nicht entfernte) Gewohnheiten an einem Tag – unabhaengig vom Rhythmus
+  existingOn(date) {
     return this.habits.filter((h) => (h.createdDate || '0000') <= date && (!h.archivedDate || date < h.archivedDate));
+  },
+
+  // Gewohnheiten, die an diesem Tag faellig sind (Rhythmus beachtet)
+  activeOn(date) {
+    return this.existingOn(date).filter((h) => this.appliesOn(h, date));
+  },
+
+  // Rhythmus: schedule = { type: 'daily' | 'weekdays' | 'interval', days: [0..6 (Mo=0)], every: N, anchor: 'JJJJ-MM-TT' }
+  appliesOn(h, date) {
+    const s = h.schedule;
+    if (!s || s.type === 'daily') return true;
+    if (s.type === 'weekdays') {
+      const wd = (App.parseDate(date).getDay() + 6) % 7;
+      return (s.days || []).includes(wd);
+    }
+    if (s.type === 'interval') {
+      const every = Math.max(1, Number(s.every) || 1);
+      const anchor = s.anchor || h.createdDate || date;
+      const diff = Math.round((App.parseDate(date) - App.parseDate(anchor)) / 86400000);
+      return diff >= 0 && diff % every === 0;
+    }
+    return true;
+  },
+
+  scheduleLabel(h) {
+    const s = h.schedule;
+    if (!s || s.type === 'daily') return 'Täglich';
+    if (s.type === 'weekdays') {
+      const names = ['Mo', 'Di', 'Mi', 'Do', 'Fr', 'Sa', 'So'];
+      const days = [...(s.days || [])].sort();
+      if (days.length === 5 && days.join() === '0,1,2,3,4') return 'Mo–Fr';
+      if (days.length === 2 && days.join() === '5,6') return 'Sa, So';
+      return days.length ? days.map((d) => names[d]).join(', ') : 'Keine Tage';
+    }
+    const n = Math.max(1, Number(s.every) || 1);
+    return n === 1 ? 'Täglich' : `Alle ${n} Tage`;
   },
 
   scored(date) {
@@ -47,7 +84,10 @@ const Habits = {
     const earned = act.reduce((s, h) => s + (this.isDone(date, h.id) ? (h.xp || 1) : 0), 0);
     const doneCount = act.filter((h) => this.isDone(date, h.id)).length;
     const extra = act.filter((h) => this.isDone(date, h.id)).reduce((s, h) => s + this.childrenOf(h.id, date).reduce((a, k) => a + (this.isDone(date, k.id) ? (k.xp || 1) : 0), 0), 0);
-    return { date, earned, max, extra, pct: max ? earned / max : 0, complete: max > 0 && earned >= max, count: act.length, doneCount, scored: this.scored(date) };
+    const first = this.firstDate();
+    // Ruhetag: nichts geplant, obwohl es Gewohnheiten gibt (zaehlt weder fuer noch gegen den Streak)
+    const rest = max === 0 && !!first && date >= first;
+    return { date, earned, max, extra, rest, pct: max ? earned / max : 0, complete: max > 0 && earned >= max, count: act.length, doneCount, scored: this.scored(date) };
   },
 
   range(dates) {
@@ -55,7 +95,7 @@ const Habits = {
     dates.forEach((d) => {
       if (!this.scored(d)) return;
       const s = this.day(d);
-      if (!s.max) { allDone = false; return; } // Tage ohne aktive Gewohnheit koennen nicht "perfekt" sein
+      if (!s.max) { if (!s.rest) allDone = false; return; } // vor der ersten Gewohnheit: nicht "perfekt"; Ruhetage: neutral
       days++; earned += s.earned; max += s.max;
       if (!s.complete) allDone = false;
     });
@@ -78,7 +118,8 @@ const Habits = {
     while (guard++ < 800) {
       if (this.scored(d)) {
         const s = this.day(d);
-        if (s.complete) n++;
+        if (s.rest) { /* Ruhetag: weder Streak noch Bruch */ }
+        else if (s.complete) n++;
         else if (!(first && d === today)) break;
       }
       first = false;
@@ -96,7 +137,8 @@ const Habits = {
     while (d <= today) {
       if (this.scored(d)) {
         const s = this.day(d);
-        if (s.complete) { run++; best = Math.max(best, run); }
+        if (s.rest) { /* neutral */ }
+        else if (s.complete) { run++; best = Math.max(best, run); }
         else if (d !== today) run = 0;
       }
       d = App.addDays(d, 1);

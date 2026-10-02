@@ -24,7 +24,7 @@ const App = {
       btn.addEventListener('click', () => this.navigate(btn.dataset.route));
     });
     const fab = document.getElementById('fab');
-    fab.innerHTML = Icons.plus();
+    fab.innerHTML = Icons.plus() + '<span class="fab-label">Neu erfassen</span>';
     fab.addEventListener('click', () => this.quickAdd());
     document.getElementById('settingsBtn').addEventListener('click', () => SettingsView.open());
     document.getElementById('backBtn').addEventListener('click', () => this.back());
@@ -62,6 +62,8 @@ const App = {
 
     if ('serviceWorker' in navigator && (location.protocol === 'http:' || location.protocol === 'https:')) this.registerSW();
     try { Sync.start(); } catch (e) { console.warn(e); }
+    // Bilder im Hintergrund in den eigenen Speicher umziehen und Verwaistes aufraeumen
+    setTimeout(() => { Img.migrate().then(() => Img.gc()).catch((e) => this.logError(e.message)); }, 3500);
 
     const splash = document.getElementById('splash');
     setTimeout(() => {

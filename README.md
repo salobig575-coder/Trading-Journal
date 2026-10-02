@@ -20,6 +20,16 @@ Mobile-first PWA (Vanilla JS, IndexedDB, offline-fähig) – Nachbau des Notion-
 
 Tägliche Gewohnheiten mit XP-Gewichtung: Tages-Ring, Wochen-Score (Mo–Fr, Wochenende optional), Monats-Score mit Heatmap, Streak und Feier-Effekt, wenn ein Tag/eine Woche/ein Monat komplett ist. Alles unter **Routine → Gewohnheiten & XP bearbeiten** anpassbar.
 
+**Rhythmus:** Jede Gewohnheit kann täglich, an bestimmten Wochentagen (z. B. jeden Donnerstag) oder alle N Tage (z. B. jeden 2. Tag) fällig sein. Tage ohne fällige Gewohnheit sind Ruhetage – sie verbessern oder brechen weder Streak noch Wochen-/Monatswertung. Eine spätere Änderung des Rhythmus gilt rückwirkend für die Auswertung.
+
+## Desktop & Tastatur
+
+Ab 1024 px Breite (mit Maus) wird die untere Leiste zur Seitenleiste. Tastenkürzel: **H** Heute · **J** Journal · **R** Routine · **S** Statistik · **N** neuer Trade · **/** Suche · **?** Übersicht.
+
+## Bilder
+
+Screenshots liegen in einem eigenen Speicher (`images`) statt in den Trades. Das hält Liste, Abgleich und Export schnell; ältere Einträge werden einmalig automatisch umgezogen.
+
 Alle Auswahllisten (Pairs, Models, PO3, Entry-Setups, DoL, Macros, Ergebnisse …) stammen aus dem Notion und sind in den Einstellungen anpassbar.
 
 ## Lokal starten

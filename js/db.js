@@ -1,8 +1,8 @@
 const DB_NAME = 'trading-journal-db';
-const DB_VERSION = 2;
-const DB_STORES = ['trades', 'analyses', 'collections', 'checklists', 'weeks', 'settings', 'habits', 'habitLogs'];
+const DB_VERSION = 3;
+const DB_STORES = ['trades', 'analyses', 'collections', 'checklists', 'weeks', 'settings', 'habits', 'habitLogs', 'images'];
 // Stores mit "id" als Schluessel (alle anderen nutzen "key")
-const DB_ID_STORES = ['trades', 'analyses', 'collections', 'habits', 'habitLogs'];
+const DB_ID_STORES = ['trades', 'analyses', 'collections', 'habits', 'habitLogs', 'images'];
 // Einstellungen, die mit der Cloud abgeglichen werden
 const DB_SYNC_SETTINGS = ['options', 'habitSettings', 'riskRules', 'onboarded'];
 
@@ -27,6 +27,7 @@ function openDB() {
       if (!db.objectStoreNames.contains('weeks')) db.createObjectStore('weeks', { keyPath: 'key' });
       if (!db.objectStoreNames.contains('settings')) db.createObjectStore('settings', { keyPath: 'key' });
       if (!db.objectStoreNames.contains('habits')) db.createObjectStore('habits', { keyPath: 'id' });
+      if (!db.objectStoreNames.contains('images')) db.createObjectStore('images', { keyPath: 'id' });
       if (!db.objectStoreNames.contains('habitLogs')) {
         const s = db.createObjectStore('habitLogs', { keyPath: 'id' });
         s.createIndex('date', 'date');
@@ -71,6 +72,16 @@ const DB = {
     });
     if (DB_CACHED.includes(storeName)) this._cache[storeName] = rows;
     return rows.slice();
+  },
+
+  // Nur die Schluessel lesen (ohne die Datensaetze zu laden)
+  async keys(storeName) {
+    const db = await dbPromise;
+    return new Promise((resolve, reject) => {
+      const req = db.transaction(storeName, 'readonly').objectStore(storeName).getAllKeys();
+      req.onsuccess = () => resolve(req.result);
+      req.onerror = () => reject(req.error);
+    });
   },
 
   async get(storeName, key) {

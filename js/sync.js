@@ -262,12 +262,21 @@ const Sync = {
     const tomb = await DB.getSetting('_tomb', []);
     tomb.forEach((t) => rows.push({ user_id: uid, store: t.store, id: t.id, data: null, deleted: true, updated_at: t.u }));
 
-    for (let i = 0; i < rows.length; i += 15) {
-      const chunk = rows.slice(i, i + 15);
+    // In Paketen senden: hoechstens 25 Zeilen oder ca. 1,2 MB pro Anfrage (Bilder sind gross)
+    let chunk = [], bytes = 0;
+    const flush = async () => {
+      if (!chunk.length) return;
       await this.http('/rest/v1/journal_data?on_conflict=user_id,store,id', {
         method: 'POST', headers: { Prefer: 'resolution=merge-duplicates,return=minimal' }, body: chunk,
       }, token);
+      chunk = []; bytes = 0;
+    };
+    for (const row of rows) {
+      const size = JSON.stringify(row).length;
+      if (chunk.length && (chunk.length >= 25 || bytes + size > 1200000)) await flush();
+      chunk.push(row); bytes += size;
     }
+    await flush();
     for (const m of marks) {
       const fresh = await DB.get(m.store, DB_ID_STORES.includes(m.store) ? m.item.id : m.item.key);
       if (fresh && (fresh._u === undefined ? 1 : fresh._u) === m.u) await DB.putRaw(m.store, { ...fresh, _s: m.u });

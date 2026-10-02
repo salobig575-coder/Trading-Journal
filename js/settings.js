@@ -138,6 +138,7 @@ const SettingsView = {
         }, 340);
       }),
       rowBtn('shield', 'Datenschutz', () => { App.closeModal(); setTimeout(() => Privacy.open(), 340); }),
+      Shortcuts.available() ? rowBtn('keyboard', 'Tastenkürzel', () => { App.closeModal(); setTimeout(() => Shortcuts.help(), 340); }) : null,
       rowBtn('sparkles', 'Kurzanleitung', () => { App.closeModal(); setTimeout(() => Onboarding.show(false), 340); }),
       rowBtn('alert', 'Fehlerprotokoll', () => { App.closeModal(); setTimeout(() => this.errorLog(), 340); }),
     ]);
