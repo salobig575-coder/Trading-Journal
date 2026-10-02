@@ -1,0 +1,81 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Trading Journal</title>
+<meta name="theme-color" content="#6d4aff">
+<meta name="description" content="Trading Journal 2026: Trades, Analysen, Statistiken, Equity Curve, Wochenplaner und Trading-Model-Checkliste.">
+<link rel="manifest" href="manifest.json">
+<link rel="icon" href="icons/icon.svg" type="image/svg+xml">
+<link rel="apple-touch-icon" href="icons/icon-192.png">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="Journal">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<link rel="stylesheet" href="css/style.css">
+<script>
+  (function () {
+    try {
+      var t = localStorage.getItem('theme');
+      if (t === 'light' || t === 'dark') document.documentElement.setAttribute('data-theme', t);
+    } catch (e) {}
+  })();
+</script>
+</head>
+<body>
+
+<div id="splash">
+  <div class="splash-logo">
+    <svg viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+      <path d="M4 20h16"/><path d="m5 15 4.5-5 3.5 3.5L19 6"/><path d="M15 6h4v4"/>
+    </svg>
+  </div>
+  <div class="splash-title">Trading Journal</div>
+  <div class="splash-sub">a Year of Data..</div>
+  <div class="splash-dots"><span></span><span></span><span></span></div>
+</div>
+
+<div id="app">
+  <header class="topbar">
+    <div class="title-wrap">
+      <button id="backBtn" class="round-btn" title="Zurück"></button>
+      <div style="min-width:0">
+        <h1 id="pageTitle">Journal 2026</h1>
+        <div class="sub" id="pageSub"></div>
+      </div>
+    </div>
+    <button id="settingsBtn" class="round-btn" title="Einstellungen"></button>
+  </header>
+  <main id="view"></main>
+  <div class="nav-wrap">
+    <nav class="bottomnav">
+      <div class="nav-indicator" id="navIndicator"></div>
+      <button data-route="home"><span class="ic"></span>Home</button>
+      <button data-route="journal"><span class="ic"></span>Journal</button>
+      <button data-route="analyse"><span class="ic"></span>Analyse</button>
+      <button data-route="stats"><span class="ic"></span>Statistik</button>
+    </nav>
+  </div>
+</div>
+
+<script src="js/icons.js"></script>
+<script src="js/db.js"></script>
+<script src="js/options.js"></script>
+<script src="js/calc.js"></script>
+<script src="js/app.js"></script>
+<script src="js/ui.js"></script>
+<script src="js/charts.js"></script>
+<script src="js/seed.js"></script>
+<script src="js/journal.js"></script>
+<script src="js/analysis.js"></script>
+<script src="js/collections.js"></script>
+<script src="js/tools.js"></script>
+<script src="js/stats.js"></script>
+<script src="js/home.js"></script>
+<script src="js/settings.js"></script>
+<script>
+  App.init();
+</script>
+</body>
+</html>
