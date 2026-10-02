@@ -22,6 +22,7 @@ const SettingsView = {
         App.el('h2', {}, 'Darstellung'),
         App.el('div', { class: 'fab-row', style: 'margin-bottom:0' }, [themeBtn('auto', 'Automatisch'), themeBtn('light', 'Hell'), themeBtn('dark', 'Dunkel')]),
       ]),
+      this.syncCard(),
       App.el('div', { class: 'card' }, [
         App.el('h2', {}, [App.icon('journal', 14), 'Auswahllisten']),
         App.el('p', { class: 'tag' }, 'Pairs, Models, PO3, Entry-Setups, DoL, Macros, Ergebnisse … passe alle Listen an dein Modell an.'),
@@ -48,6 +49,60 @@ const SettingsView = {
       App.el('button', { class: 'btn secondary', onclick: () => App.closeModal() }, 'Schließen'),
     ]);
     App.showModal(content);
+  },
+
+  // Cloud-Sync (Supabase) – rendert sich bei Statuswechsel selbst neu
+  syncCard() {
+    const card = App.el('div', { class: 'card' });
+    let msg = '';
+    let busy = false;
+    const draw = () => {
+      card.innerHTML = '';
+      card.appendChild(App.el('h2', {}, [App.icon('sparkles', 14), 'Cloud-Sync (Supabase)']));
+      const note = (t, cls = 'tag') => card.appendChild(App.el('p', { class: cls, style: 'margin:6px 0' }, t));
+
+      if (!Sync.configured()) {
+        const c = Sync.config();
+        const url = App.el('input', { type: 'url', value: c.url, placeholder: 'https://xxxx.supabase.co' });
+        const key = App.el('input', { type: 'text', value: c.anonKey, placeholder: 'anon / publishable key' });
+        note('Trage Project-URL und anon-Key aus Supabase (Project Settings → API) ein. Dieselben Werte brauchst du auf jedem Gerät.');
+        card.append(UI.field('Project URL', url), UI.field('Anon Key', key));
+        card.appendChild(App.el('button', { class: 'btn', onclick: () => { Sync.saveConfig(url.value, key.value); msg = ''; draw(); } }, 'Speichern'));
+        return;
+      }
+      if (!Sync.loggedIn()) {
+        const email = App.el('input', { type: 'text', inputmode: 'email', autocomplete: 'email', placeholder: 'E-Mail' });
+        const pw = App.el('input', { type: 'password', autocomplete: 'current-password', placeholder: 'Passwort (min. 6 Zeichen)', style: 'width:100%;background:var(--surface-2);border:1px solid transparent;border-radius:var(--radius-sm);padding:12px 14px;font-size:15px;outline:none' });
+        note('Melde dich an, damit dein Journal auf allen Geräten gleich ist. Beim ersten Mal „Registrieren“.');
+        card.append(UI.field('E-Mail', email), UI.field('Passwort', pw));
+        const go = (fn) => async () => {
+          if (busy) return; busy = true; msg = 'Bitte warten …'; draw();
+          try {
+            const r = await fn(email.value.trim(), pw.value);
+            if (r === 'confirm') msg = 'Registriert. Bestätige die E-Mail (Link im Postfach) und melde dich danach an.';
+            else { msg = ''; busy = false; await Sync.run(); draw(); return; }
+          } catch (e) { msg = e.message; }
+          busy = false; draw();
+        };
+        card.appendChild(App.el('div', { class: 'btn-row' }, [
+          App.el('button', { class: 'btn', onclick: go((e, p) => Sync.signIn(e, p)) }, 'Anmelden'),
+          App.el('button', { class: 'btn secondary', onclick: go((e, p) => Sync.signUp(e, p)) }, 'Registrieren'),
+        ]));
+        if (msg) note(msg, 'tag neg');
+        if (!Sync.config().fromFile) card.appendChild(App.el('button', { class: 'add-line', onclick: () => { localStorage.removeItem('sb_cfg'); draw(); } }, 'Projekt-Zugangsdaten ändern'));
+        return;
+      }
+      note(`Angemeldet als ${Sync.email()}`, 'tag');
+      const last = Sync.last || Number(localStorage.getItem('sb_last') || 0);
+      note(last ? `Letzter Abgleich: ${new Date(last).toLocaleString('de-DE')} ${Sync.info ? '(' + Sync.info + ')' : ''}` : 'Noch nicht abgeglichen.');
+      if (Sync.error) note(Sync.error, 'tag neg');
+      card.appendChild(App.el('div', { class: 'btn-row' }, [
+        App.el('button', { class: 'btn', onclick: async () => { card.querySelector('.btn').textContent = 'Synchronisiere …'; await Sync.run(); draw(); } }, [App.icon('upload'), 'Jetzt abgleichen']),
+        App.el('button', { class: 'btn secondary', onclick: () => { if (UI.confirm('Abmelden? Die Daten bleiben auf diesem Gerät erhalten.')) { Sync.signOut(); draw(); } } }, 'Abmelden'),
+      ]));
+    };
+    draw();
+    return card;
   },
 
   manageOptions() {

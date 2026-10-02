@@ -53,7 +53,14 @@ const DB = {
     });
   },
 
-  async put(storeName, obj) {
+  // Welche Datensaetze werden mit Supabase synchronisiert?
+  syncable(storeName, obj) {
+    if (storeName === 'settings') return !!obj && obj.key === 'options';
+    return DB_STORES.includes(storeName);
+  },
+
+  // Schreiben ohne Sync-Stempel (Seed, Daten aus der Cloud)
+  async putRaw(storeName, obj) {
     const db = await dbPromise;
     return new Promise((resolve, reject) => {
       const tx = db.transaction(storeName, 'readwrite');
@@ -63,18 +70,30 @@ const DB = {
     });
   },
 
+  async put(storeName, obj) {
+    const sync = this.syncable(storeName, obj);
+    if (sync) obj._u = Date.now();
+    await this.putRaw(storeName, obj);
+    if (sync && this.onChange) this.onChange();
+    return obj;
+  },
+
   async putMany(storeName, items) {
     const db = await dbPromise;
-    return new Promise((resolve, reject) => {
+    const stamp = Date.now();
+    await new Promise((resolve, reject) => {
       const tx = db.transaction(storeName, 'readwrite');
       const store = tx.objectStore(storeName);
-      items.forEach((it) => store.put(it));
+      items.forEach((it) => { if (this.syncable(storeName, it)) it._u = stamp; store.put(it); });
       tx.oncomplete = () => resolve(items);
       tx.onerror = () => reject(tx.error);
     });
+    if (this.onChange) this.onChange();
+    return items;
   },
 
-  async delete(storeName, key) {
+  // Loeschen ohne Tombstone (wenn die Loeschung aus der Cloud kommt)
+  async delete_raw(storeName, key) {
     const db = await dbPromise;
     return new Promise((resolve, reject) => {
       const tx = db.transaction(storeName, 'readwrite');
@@ -82,6 +101,22 @@ const DB = {
       tx.oncomplete = () => resolve();
       tx.onerror = () => reject(tx.error);
     });
+  },
+
+  async delete(storeName, key) {
+    const db = await dbPromise;
+    await new Promise((resolve, reject) => {
+      const tx = db.transaction(storeName, 'readwrite');
+      tx.objectStore(storeName).delete(key);
+      tx.oncomplete = () => resolve();
+      tx.onerror = () => reject(tx.error);
+    });
+    if (this.syncable(storeName, { key })) {
+      const tomb = await this.getSetting('_tomb', []);
+      tomb.push({ store: storeName, id: key, u: Date.now() });
+      await this.putRaw('settings', { key: '_tomb', value: tomb });
+      if (this.onChange) this.onChange();
+    }
   },
 
   async getSetting(key, fallback) {

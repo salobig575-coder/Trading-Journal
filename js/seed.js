@@ -8,7 +8,7 @@ const Seed = {
     if (await DB.getSetting('seeded', false)) return;
     const I = (t, c) => this.item(t, c);
 
-    await DB.put('checklists', {
+    await DB.putRaw('checklists', {
       key: 'tradingModel',
       sections: [
         { title: 'BIAS', items: [
@@ -40,13 +40,13 @@ const Seed = {
       ],
     });
 
-    await DB.put('checklists', {
+    await DB.putRaw('checklists', {
       key: 'mistakes',
       sections: [{ title: '', items: [I('Risk amounts, $350 mffu, $500 tsx'), I('Patience')] }],
     });
 
-    await DB.put('collections', {
-      id: DB.uid(), kind: 'backtests', name: 'Backtest 1', year: '2024', tags: [], url: '',
+    await DB.putRaw('collections', {
+      id: 'seed-backtest-1', kind: 'backtests', name: 'Backtest 1', year: '2024', tags: [], url: '',
       body: 'Put backtest result and notes here', createdAt: Date.now(), updatedAt: Date.now(),
     });
 
@@ -56,9 +56,9 @@ const Seed = {
     const week = this.emptyWeek(key, monday);
     week.reminders[0] = 'BNQ at checkout';
     week.days.mon = ['Gym', 'Finish Homework', 'Backtest 1 week of data', 'USE code BNQ on my new eval'].map((t) => ({ text: t, checked: false }));
-    await DB.put('weeks', week);
+    await DB.putRaw('weeks', week);
 
-    await DB.setSetting('seeded', true);
+    await DB.putRaw('settings', { key: 'seeded', value: true });
   },
 
   emptyWeek(key, start) {

@@ -32,6 +32,8 @@ const App = {
       navigator.serviceWorker.register('sw.js').catch(() => {});
     }
 
+    Sync.start();
+
     const splash = document.getElementById('splash');
     setTimeout(() => {
       splash.classList.add('hide');

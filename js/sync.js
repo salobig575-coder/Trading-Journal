@@ -1,0 +1,181 @@
+// Supabase-Sync (nur fetch, keine Abhaengigkeiten). Lokal bleibt IndexedDB der Hauptspeicher (offline-faehig),
+// Supabase ist der Abgleich zwischen Geraeten. Konflikte: letzte Aenderung pro Datensatz gewinnt.
+const SYNC_STORES = ['trades', 'analyses', 'collections', 'checklists', 'weeks', 'settings'];
+
+const Sync = {
+  running: false,
+  timer: null,
+  last: null,
+  error: '',
+  info: '',
+
+  // ---------- Konfiguration & Session ----------
+  config() {
+    const d = window.SUPABASE_CONFIG || {};
+    let saved = {};
+    try { saved = JSON.parse(localStorage.getItem('sb_cfg') || '{}'); } catch (e) {}
+    const url = (d.url || saved.url || '').replace(/\/+$/, '');
+    return { url, anonKey: d.anonKey || saved.anonKey || '', fromFile: !!(d.url && d.anonKey) };
+  },
+  saveConfig(url, anonKey) {
+    localStorage.setItem('sb_cfg', JSON.stringify({ url: url.trim(), anonKey: anonKey.trim() }));
+  },
+  configured() { const c = this.config(); return !!(c.url && c.anonKey); },
+
+  session() { try { return JSON.parse(localStorage.getItem('sb_session') || 'null'); } catch (e) { return null; } },
+  setSession(s) {
+    if (s) {
+      const expiresAt = s.expires_at ? s.expires_at * 1000 : Date.now() + (s.expires_in || 3600) * 1000;
+      localStorage.setItem('sb_session', JSON.stringify({ access_token: s.access_token, refresh_token: s.refresh_token, expiresAt, user: s.user }));
+    } else localStorage.removeItem('sb_session');
+  },
+  loggedIn() { return !!this.session(); },
+  email() { const s = this.session(); return s && s.user ? s.user.email : ''; },
+
+  // ---------- HTTP ----------
+  async http(path, opts = {}, token) {
+    const c = this.config();
+    const headers = { apikey: c.anonKey, 'Content-Type': 'application/json', ...(opts.headers || {}) };
+    headers.Authorization = 'Bearer ' + (token || c.anonKey);
+    const res = await fetch(c.url + path, { method: opts.method || 'GET', headers, body: opts.body ? JSON.stringify(opts.body) : undefined });
+    let data = null;
+    const text = await res.text();
+    try { data = text ? JSON.parse(text) : null; } catch (e) { data = text; }
+    if (!res.ok) {
+      const msg = (data && (data.msg || data.message || data.error_description || data.error)) || res.statusText;
+      const err = new Error(msg); err.status = res.status; throw err;
+    }
+    return data;
+  },
+
+  async signIn(email, password) {
+    const data = await this.http('/auth/v1/token?grant_type=password', { method: 'POST', body: { email, password } });
+    this.setSession(data);
+  },
+
+  async signUp(email, password) {
+    const data = await this.http('/auth/v1/signup', { method: 'POST', body: { email, password } });
+    if (data && data.access_token) { this.setSession(data); return 'in'; }
+    return 'confirm';
+  },
+
+  signOut() { this.setSession(null); this.last = null; },
+
+  async token() {
+    const s = this.session();
+    if (!s) throw new Error('Nicht angemeldet');
+    if (s.expiresAt - 60000 > Date.now()) return s.access_token;
+    const data = await this.http('/auth/v1/token?grant_type=refresh_token', { method: 'POST', body: { refresh_token: s.refresh_token } });
+    this.setSession(data);
+    return data.access_token;
+  },
+
+  // ---------- Abgleich ----------
+  schedule() {
+    if (!this.configured() || !this.loggedIn()) return;
+    clearTimeout(this.timer);
+    this.timer = setTimeout(() => this.run(), 2500);
+  },
+
+  start() {
+    DB.onChange = () => this.schedule();
+    window.addEventListener('online', () => this.run());
+    document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'visible') this.run(); });
+    this.run();
+  },
+
+  async run(opts = {}) {
+    if (this.running || !this.configured() || !this.loggedIn()) return { skipped: true };
+    if (!navigator.onLine) { this.error = 'Offline – Abgleich folgt, sobald du wieder online bist.'; return { skipped: true }; }
+    this.running = true;
+    this.error = '';
+    let pulled = 0, pushed = 0;
+    try {
+      const token = await this.token();
+      const uid = this.session().user.id;
+      pulled = await this.pull(token);
+      pushed = await this.push(token, uid);
+      this.last = Date.now();
+      localStorage.setItem('sb_last', String(this.last));
+      this.info = `↓ ${pulled} · ↑ ${pushed}`;
+      if (pulled > 0) {
+        await Options.load();
+        if (!App.stack.length && !App._modal && !opts.noRefresh) App.refresh();
+      }
+    } catch (e) {
+      this.error = e.status === 401 ? 'Anmeldung abgelaufen – bitte neu anmelden.' : e.message;
+      if (e.status === 401) this.setSession(null);
+    } finally {
+      this.running = false;
+    }
+    return { pulled, pushed, error: this.error };
+  },
+
+  async pull(token) {
+    const cursor = await DB.getSetting('_pullCursor', '');
+    let maxSeen = cursor, applied = 0, offset = 0;
+    const tomb = await DB.getSetting('_tomb', []);
+    const since = cursor ? `&synced_at=gt.${encodeURIComponent(cursor)}` : '';
+    for (;;) {
+      const rows = await this.http(`/rest/v1/journal_data?select=store,id,data,deleted,updated_at,synced_at&order=synced_at.asc${since}&limit=200&offset=${offset}`, {}, token);
+      if (!rows.length) break;
+      for (const row of rows) {
+        if (row.synced_at > maxSeen) maxSeen = row.synced_at;
+        if (!SYNC_STORES.includes(row.store)) continue;
+        const keyField = ['trades', 'analyses', 'collections'].includes(row.store) ? 'id' : 'key';
+        const local = await DB.get(row.store, row.id);
+        const localU = local ? (local._u || 0) : 0;
+        const t = tomb.find((x) => x.store === row.store && x.id === row.id);
+        if (t && t.u >= row.updated_at) continue; // lokal geloescht & neuer
+        if (row.updated_at <= localU) continue;   // lokale Version ist neuer/gleich
+        if (row.deleted) {
+          if (local) { await DB.delete_raw(row.store, row.id); applied++; }
+        } else if (row.data) {
+          const obj = { ...row.data, [keyField]: row.id, _u: row.updated_at, _s: row.updated_at };
+          await DB.putRaw(row.store, obj);
+          applied++;
+        }
+      }
+      if (rows.length < 200) break;
+      offset += 200;
+    }
+    await DB.putRaw('settings', { key: '_pullCursor', value: maxSeen });
+    return applied;
+  },
+
+  async push(token, uid) {
+    const rows = [];
+    const marks = [];
+    for (const store of SYNC_STORES) {
+      const items = await DB.getAll(store);
+      for (const it of items) {
+        if (store === 'settings' && it.key !== 'options') continue;
+        const u = it._u === undefined ? 1 : it._u;
+        if (u <= (it._s || 0)) continue;
+        const id = ['trades', 'analyses', 'collections'].includes(store) ? it.id : it.key;
+        const { _s, ...data } = it;
+        rows.push({ user_id: uid, store, id, data: { ...data, _u: u }, deleted: false, updated_at: u });
+        marks.push({ store, item: it, u });
+      }
+    }
+    const tomb = await DB.getSetting('_tomb', []);
+    tomb.forEach((t) => rows.push({ user_id: uid, store: t.store, id: t.id, data: null, deleted: true, updated_at: t.u }));
+
+    for (let i = 0; i < rows.length; i += 15) {
+      const chunk = rows.slice(i, i + 15);
+      await this.http('/rest/v1/journal_data?on_conflict=user_id,store,id', {
+        method: 'POST', headers: { Prefer: 'resolution=merge-duplicates,return=minimal' }, body: chunk,
+      }, token);
+    }
+    for (const m of marks) {
+      const fresh = await DB.get(m.store, m.store === 'settings' || ['checklists', 'weeks'].includes(m.store) ? m.item.key : m.item.id);
+      if (fresh && (fresh._u === undefined ? 1 : fresh._u) === m.u) await DB.putRaw(m.store, { ...fresh, _s: m.u });
+    }
+    if (tomb.length) {
+      const now = await DB.getSetting('_tomb', []);
+      const sent = new Set(tomb.map((t) => t.store + '|' + t.id + '|' + t.u));
+      await DB.putRaw('settings', { key: '_tomb', value: now.filter((t) => !sent.has(t.store + '|' + t.id + '|' + t.u)) });
+    }
+    return rows.length;
+  },
+};
