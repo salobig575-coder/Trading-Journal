@@ -125,6 +125,8 @@ const RoutineView = {
     await Habits.load();
     const wrap = App.el('div');
     const today = App.todayStr();
+    if (!this.date || this.date > today) this.date = today;
+    const date = this.date;
 
     if (!Habits.habits.filter((h) => !h.archivedDate).length) {
       wrap.appendChild(App.empty('routine', 'Noch keine Gewohnheiten. Lege deine erste an – klein anfangen reicht.'));
@@ -141,7 +143,14 @@ const RoutineView = {
     const streakBox = App.el('div', { class: 'streak' }, [App.el('span', { html: Icons.flame() }), streakEl]);
     const bestEl = App.el('div', { class: 'tag' }, '');
     const msgEl = App.el('div', { style: 'font-weight:600;font-size:15px;line-height:1.35' }, '');
+    const dayLabel = date === today ? 'Heute' : date === App.addDays(today, -1) ? 'Gestern' : App.parseDate(date).toLocaleDateString('de-DE', { weekday: 'short', day: 'numeric', month: 'short' });
+    const go = (n) => () => { this.date = App.addDays(date, n); this.month = this.date.slice(0, 7); App.refresh(); };
     wrap.appendChild(App.el('div', { class: 'card glow' }, [
+      App.el('div', { class: 'cal-head', style: 'margin-bottom:18px' }, [
+        App.el('button', { class: 'icon-btn', html: Icons.chevronLeft(), onclick: go(-1), 'aria-label': 'Vorheriger Tag' }),
+        App.el('div', { class: 'ttl' }, dayLabel),
+        App.el('button', { class: 'icon-btn', style: date >= today ? 'opacity:.25;pointer-events:none' : '', html: Icons.chevronRight(), onclick: go(1), 'aria-label': 'Nächster Tag' }),
+      ]),
       App.el('div', { class: 'today-top' }, [
         ring,
         App.el('div', { class: 'grow' }, [streakBox, bestEl, App.el('div', { style: 'height:12px' }), msgEl]),
@@ -151,8 +160,8 @@ const RoutineView = {
     // ----- Checkliste -----
     const listCard = App.el('div', { class: 'card', style: 'padding:8px 18px' });
     const rows = new Map();
-    Habits.activeOn(today).forEach((h) => {
-      const done = Habits.isDone(today, h.id);
+    Habits.activeOn(date).forEach((h) => {
+      const done = Habits.isDone(date, h.id);
       const cb = App.el('button', { class: 'checkbox' + (done ? ' checked' : ''), html: Icons.check(), 'aria-label': h.name });
       const row = App.el('div', { class: 'habit' + (done ? ' done' : ''), onclick: () => onToggle(h, row, cb) }, [
         cb, App.el('div', { class: 'nm' }, h.name), App.el('div', { class: 'xp' }, `+${h.xp} XP`),
@@ -160,6 +169,8 @@ const RoutineView = {
       rows.set(h.id, row);
       listCard.appendChild(row);
     });
+    if (!rows.size) listCard.appendChild(App.el('div', { class: 'tag', style: 'padding:18px 4px 8px;text-align:center' }, 'An diesem Tag gab es noch keine Gewohnheiten.'));
+    listCard.appendChild(App.el('button', { class: 'habit-add', onclick: () => this.addSheet() }, [App.icon('plus', 16), 'Eigene Gewohnheit hinzufügen']));
     wrap.appendChild(listCard);
 
     // ----- Woche -----
@@ -177,7 +188,7 @@ const RoutineView = {
     ];
 
     const drawSummary = (animate) => {
-      const s = Habits.day(today);
+      const s = Habits.day(date);
       ring.set(s.pct);
       App.animateNumber(pctEl, Math.round(s.pct * 100), { suffix: '%', duration: animate ? 900 : 500, from: Number(pctEl.dataset.v || 0) });
       pctEl.dataset.v = Math.round(s.pct * 100);
@@ -187,11 +198,11 @@ const RoutineView = {
       streakBox.classList.toggle('cold', st === 0);
       bestEl.textContent = st === 1 ? 'Tag in Folge' : 'Tage in Folge';
       bestEl.textContent += ` · Bestwert ${Habits.best()}`;
-      msgEl.textContent = [...MSG].reverse().find(([t]) => s.pct >= t)[1];
+      msgEl.textContent = s.max ? [...MSG].reverse().find(([t]) => s.pct >= t)[1] : 'Noch nichts geplant.';
     };
 
     const drawWeek = () => {
-      const dates = Habits.weekDates(today);
+      const dates = Habits.weekDates(date);
       const r = Habits.range(dates);
       weekCard.innerHTML = '';
       weekCard.appendChild(App.el('div', { class: 'score-line' }, [
@@ -243,15 +254,19 @@ const RoutineView = {
     };
 
     const onToggle = async (h, row, cb) => {
-      const before = { day: Habits.day(today).complete, week: Habits.range(Habits.weekDates(today)).complete, month: Habits.range(Habits.monthDates(today.slice(0, 7))).complete };
-      const done = await Habits.toggle(today, h.id);
+      const snap = () => ({ day: Habits.day(date).complete, week: Habits.range(Habits.weekDates(date)).complete, month: Habits.range(Habits.monthDates(date.slice(0, 7))).complete });
+      const before = snap();
+      const done = await Habits.toggle(date, h.id);
       row.classList.toggle('done', done);
       cb.classList.toggle('checked', done);
-      if (done) { cb.classList.add('pop'); setTimeout(() => cb.classList.remove('pop'), 650); }
+      if (done) {
+        cb.classList.add('pop'); setTimeout(() => cb.classList.remove('pop'), 650);
+        try { if (navigator.vibrate) navigator.vibrate(14); } catch (e) {}
+      }
       drawSummary(); drawWeek(); drawMonth();
       if (!done) return;
-      const after = { day: Habits.day(today).complete, week: Habits.range(Habits.weekDates(today)).complete, month: Habits.range(Habits.monthDates(today.slice(0, 7))).complete };
-      const xp = Habits.day(today).earned;
+      const after = snap();
+      const xp = Habits.day(date).earned;
       if (after.month && !before.month) Fx.celebrate('🏆', 'Monat perfekt!', 'Jeder gewertete Tag war komplett. Das machen die wenigsten.', 2);
       else if (after.week && !before.week) Fx.celebrate('🔥', 'Woche perfekt!', 'Alle Tage dieser Woche komplett. Weiter so!', 1.5);
       else if (after.day && !before.day) Fx.celebrate('✨', 'Tag komplett', `${xp} XP heute – Streak: ${Habits.streak(today)}`, 1);
@@ -259,6 +274,45 @@ const RoutineView = {
 
     drawSummary(true); drawWeek(); drawMonth();
     return wrap;
+  },
+
+  // Eigene Gewohnheit schnell anlegen (Name, XP, Vorschlaege)
+  addSheet() {
+    const taken = new Set(Habits.habits.filter((h) => !h.archivedDate).map((h) => h.name.toLowerCase()));
+    const ideas = ['Wasser trinken (2 L)', '10 Min Meditation', 'Lesen (20 Min)', 'Früh aufstehen', 'Spazieren / Schritte', 'Dehnen / Mobility', 'Kein Handy vor dem Schlafen', 'Trading-Plan visualisieren', 'Pause nach 2 Trades']
+      .filter((x) => !taken.has(x.toLowerCase()));
+    let xp = 3;
+    const name = App.el('input', { type: 'text', placeholder: 'z. B. 10 Min Meditation', maxlength: '60' });
+    const val = App.el('b', {}, String(xp));
+    const step = (n) => () => { xp = Math.max(1, Math.min(10, xp + n)); val.textContent = xp; };
+    const save = async () => {
+      const t = name.value.trim();
+      if (!t) { App.toast('Gib deiner Gewohnheit einen Namen.'); name.focus(); return; }
+      const order = Habits.habits.reduce((m, x) => Math.max(m, x.order || 0), 0) + 1;
+      await DB.put('habits', { id: DB.uid(), name: t, xp, order, createdDate: App.todayStr() });
+      App.closeModal();
+      App.refresh();
+      App.toast('Hinzugefügt');
+    };
+    name.addEventListener('keydown', (e) => { if (e.key === 'Enter') save(); });
+    const sheet = App.el('div', {}, [
+      App.el('h3', {}, 'Neue Gewohnheit'),
+      UI.field('Name', name),
+      ideas.length ? App.el('div', { class: 'field' }, [
+        App.el('label', {}, 'Ideen'),
+        App.el('div', { class: 'chip-group' }, ideas.slice(0, 8).map((i) => App.el('button', { class: 'chip sm', onclick: () => { name.value = i; name.focus(); } }, i))),
+      ]) : null,
+      App.el('div', { class: 'field' }, [
+        App.el('label', {}, 'Gewicht (XP) – wie wichtig ist sie?'),
+        App.el('div', { class: 'stepper' }, [App.el('button', { onclick: step(-1) }, '−'), val, App.el('button', { onclick: step(1) }, '+')]),
+      ]),
+      App.el('div', { class: 'btn-row' }, [
+        App.el('button', { class: 'btn secondary', onclick: () => App.closeModal() }, 'Abbrechen'),
+        App.el('button', { class: 'btn', onclick: save }, [App.icon('plus'), 'Hinzufügen']),
+      ]),
+    ]);
+    App.showModal(sheet);
+    setTimeout(() => name.focus(), 350);
   },
 
   // Bearbeiten: Namen, XP-Gewichtung, Hinzufuegen, Entfernen
