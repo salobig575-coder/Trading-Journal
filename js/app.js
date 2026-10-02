@@ -223,7 +223,7 @@ const App = {
     if (slide && !opts.dir) opts = { ...opts, dir: step > 0 ? 'tabR' : 'tabL' };
     this.current = route;
     this.stack = [];
-    if (route === 'routine' && typeof RoutineView !== 'undefined') { RoutineView.date = null; RoutineView.editing = false; }
+    this.prepare(route);
     history.replaceState(null, '', '#' + route);
     this.show({ dir: 'tab', ...opts });
   },
@@ -243,7 +243,15 @@ const App = {
     history.back();
   },
 
+  // Zustand, den ein Tab beim Oeffnen braucht (gemeinsam fuer Navigation und Wisch-Vorschau)
+  prepare(route) {
+    if (route === 'routine' && typeof RoutineView !== 'undefined') { RoutineView.date = null; RoutineView.editing = false; }
+  },
+
   show(opts = {}) {
+    // Bereits gezeichnete Seite uebernehmen (Wischen): kein erneutes Laden, kein Einblenden
+    const adopt = this._adopt; this._adopt = null;
+    if (adopt) opts = { ...opts, instant: true, dir: 'none' };
     const top = this.stack.at(-1);
     const route = this.routes[this.current];
     const inPage = !!top;
@@ -286,7 +294,7 @@ const App = {
       if (node) view.appendChild(node);
       void view.offsetWidth;
       view.classList.add('enter-' + dir);
-      if (dir !== 'fade') { this.stagger(view); this.countUp(view); }
+      if (dir !== 'fade' && dir !== 'none') { this.stagger(view); this.countUp(view); }
       // Gerade gespeicherter Eintrag: kurzer goldener Lichtstreifen + Scroll in Sicht
       if (this.justSaved) {
         const id = this.justSaved; this.justSaved = null;
@@ -294,8 +302,9 @@ const App = {
         if (row && !this.reducedMotion()) { row.classList.add('fresh-sweep'); setTimeout(() => row.classList.remove('fresh-sweep'), 1700); }
       }
       if (opts.keepScroll) window.scrollTo(0, y); else window.scrollTo(0, 0);
+      if (adopt && adopt.onShown) adopt.onShown();
     };
-    Promise.resolve().then(() => renderFn()).catch((e) => { console.warn(e); return this.empty('alert', 'Das konnte gerade nicht geladen werden.'); }).then((node) => {
+    Promise.resolve().then(() => (adopt ? adopt.node : renderFn())).catch((e) => { console.warn(e); return this.empty('alert', 'Das konnte gerade nicht geladen werden.'); }).then((node) => {
       const wait = swapIn ? Math.max(0, 140 - (performance.now() - t0)) : 0;
       setTimeout(() => finish(node), wait);
     });

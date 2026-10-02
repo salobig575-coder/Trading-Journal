@@ -840,3 +840,8 @@ kbd { display: inline-block; min-width: 22px; padding: 2px 7px; border-radius: 7
 .ptr.ready .ptr-ring { border-color: var(--accent); border-right-color: transparent; }
 .ptr.spin .ptr-ring { animation: spin 0.7s linear infinite; }
 .ptr.done .ptr-ring { border-color: var(--win); animation: pop var(--t-base) var(--spring) both; }
+
+/* Wisch-Vorschau: die naechste Seite liegt fest neben der aktuellen und gleitet mit dem Finger herein */
+#view.enter-none { animation: none; }
+main.peek { position: fixed; top: 0; height: 100vh; height: 100dvh; box-sizing: border-box; overflow: hidden; z-index: 5; pointer-events: none; will-change: transform; }
+#view { will-change: auto; }
