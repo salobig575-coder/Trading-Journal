@@ -84,6 +84,7 @@ const PropAccounts = {
           if (!name.value.trim()) { App.toast('Gib dem Konto einen Namen.'); return; }
           Object.assign(a, { name: name.value.trim(), start: parseFloat(start.value) || 0, target: parseFloat(target.value) || 0, maxDD: parseFloat(maxDD.value) || 0, dailyLoss: parseFloat(daily.value) || 0, trailing, closed, updatedAt: Date.now() });
           await DB.put('collections', a);
+          App.success('Konto gespeichert');
           App.closeModal(); App.refresh();
         } }, 'Speichern'),
       ]),

@@ -106,7 +106,7 @@ const JournalView = {
       trades.forEach((t, i) => {
         const cover = this.firstImage(t);
         const r = Calc.rValue(t);
-        g.appendChild(App.el('div', { class: 'g-card', style: `animation-delay:${Math.min(i, 12) * 30}ms`, onclick: () => TradeDetail.open(t) }, [
+        g.appendChild(App.el('div', { class: 'g-card', onclick: () => TradeDetail.open(t) }, [
           App.el('div', { class: 'g-cover', style: cover ? `background-image:url(${cover})` : '' }, cover ? '' : (t.pair || '·')),
           App.el('div', { class: 'g-body' }, [
             App.el('div', { class: 'tt' }, t.trade || t.pair || 'Trade'),
@@ -126,7 +126,7 @@ const JournalView = {
     const o = Calc.outcome(t);
     const r = Calc.rValue(t);
     const meta = [App.formatDate(t.date), t.pair, t.ls, t.model].filter(Boolean).join(' · ');
-    return App.el('div', { class: 'item clickable', style: `animation-delay:${Math.min(i, 12) * 30}ms`, onclick: () => TradeDetail.open(t) }, [
+    return App.el('div', { class: 'item clickable', onclick: () => TradeDetail.open(t) }, [
       App.el('div', { class: 'side-bar ' + (o === 'win' ? 'win' : o === 'loss' ? 'loss' : o === 'be' ? 'be' : '') }),
       App.el('div', { class: 'grow', style: 'padding-left:6px' }, [
         App.el('div', { class: 'item-title' }, t.trade || t.pair || 'Trade'),
@@ -321,6 +321,7 @@ const TradeForm = {
         }
       }
       await DB.put('trades', out);
+      App.success('Trade gespeichert');
       App.closePage();
     };
 

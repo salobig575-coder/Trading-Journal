@@ -185,7 +185,7 @@ const Charts = {
     sorted.forEach((r, i) => {
       const bar = App.el('div', { class: 'wr-bar' }, [App.el('i')]);
       const decided = r.wins + r.losses;
-      wrap.appendChild(App.el('div', { class: 'stat-row-line', style: `animation-delay:${i * 30}ms` }, [
+      wrap.appendChild(App.el('div', { class: 'stat-row-line' }, [
         App.el('div', {}, [
           App.el('div', { class: 'nm' }, String(r.key)),
           App.el('div', { class: 'meta' }, `${r.n} Trade${r.n === 1 ? '' : 's'} · ${decided ? Math.round(r.winrate) + '% Winrate' : 'keine Wertung'}`),

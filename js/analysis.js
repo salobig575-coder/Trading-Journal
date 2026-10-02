@@ -70,7 +70,7 @@ const AnalysisView = {
       if (!rows.length) { list.appendChild(App.empty('analyse', 'Keine Analysen gefunden.')); return; }
       rows.forEach((a, i) => {
         const tpl = AnalysisTemplates[a.type];
-        list.appendChild(App.el('div', { class: 'item clickable', style: `animation-delay:${Math.min(i, 12) * 30}ms`, onclick: () => this.edit(a) }, [
+        list.appendChild(App.el('div', { class: 'item clickable', onclick: () => this.edit(a) }, [
           App.el('span', { html: Icons[tpl ? tpl.icon : 'journal'](), style: 'width:22px;height:22px;color:var(--accent);flex-shrink:0' }),
           App.el('div', { class: 'grow' }, [
             App.el('div', { class: 'item-title' }, a.name || a.type),
@@ -195,6 +195,7 @@ const AnalysisView = {
       const out = { ...a, name: nameInput.value.trim() || this.defaultName(a.type, dateInput.value), date: dateInput.value || a.date, pairs: pairs.get(), fields: {}, images: {}, updatedAt: Date.now() };
       Object.entries(getters).forEach(([k, fn]) => { const [kind, key] = k.split(':'); (kind === 'f' ? out.fields : out.images)[key] = fn(); });
       await DB.put('analyses', out);
+      App.success('Analyse gespeichert');
       App.closePage();
     };
 

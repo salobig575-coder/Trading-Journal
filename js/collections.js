@@ -39,7 +39,7 @@ const Collections = {
           lastYear = c.year;
           l.appendChild(App.el('div', { class: 'section-title' }, `${c.year || 'Ohne Jahr'} Backtests`));
         }
-        l.appendChild(App.el('div', { class: 'item clickable', style: `align-items:flex-start;animation-delay:${Math.min(i, 12) * 30}ms`, onclick: () => this.edit(kind, c) }, [
+        l.appendChild(App.el('div', { class: 'item clickable', style: 'align-items:flex-start', onclick: () => this.edit(kind, c) }, [
           App.el('span', { html: Icons[cfg.icon](), style: 'width:20px;height:20px;color:var(--accent);flex-shrink:0;margin-top:2px' }),
           App.el('div', { class: 'grow' }, [
             App.el('div', { class: 'item-title' }, c.name || '(ohne Titel)'),
@@ -81,6 +81,7 @@ const Collections = {
           c.body = body.value;
           c.updatedAt = Date.now();
           await DB.put('collections', c);
+          App.success('Gespeichert');
           App.closeModal();
           App.refresh();
         } }, 'Speichern'),
