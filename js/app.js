@@ -50,7 +50,7 @@ const App = {
     if (!this.routes[route]) route = 'home';
     this.current = route;
     this.stack = [];
-    if (route === 'routine' && typeof RoutineView !== 'undefined') RoutineView.date = null;
+    if (route === 'routine' && typeof RoutineView !== 'undefined') { RoutineView.date = null; RoutineView.editing = false; }
     history.replaceState(null, '', '#' + route);
     this.show(opts);
   },

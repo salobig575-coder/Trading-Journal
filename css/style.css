@@ -444,6 +444,9 @@ textarea { resize: vertical; min-height: 96px; line-height: 1.5; }
 .habit.done .xp { background: var(--accent-soft); color: var(--accent); }
 .habit .checkbox { width: 30px; height: 30px; }
 .habit .checkbox svg { width: 16px; height: 16px; }
+.habit.removing { opacity: 0; transform: translateX(28px); transition: opacity .25s, transform .25s var(--ease); }
+.habit.editing { cursor: default; }
+.habit.editing .checkbox { opacity: .35; pointer-events: none; }
 .habit-add { display: flex; align-items: center; justify-content: center; gap: 8px; width: 100%; margin: 6px 0 8px; padding: 13px; border: 1.5px dashed var(--raise); border-radius: 16px; background: none; color: var(--dim); font-weight: 600; font-size: 14px; transition: border-color .25s, color .25s, background .25s, transform .3s var(--spring); }
 .habit-add:hover { border-color: rgba(var(--accent-rgb), .6); color: var(--accent); background: var(--accent-soft); }
 .habit-add:active { transform: scale(.98); }

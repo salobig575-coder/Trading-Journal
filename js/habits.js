@@ -158,13 +158,26 @@ const RoutineView = {
     ]));
 
     // ----- Checkliste -----
-    const listCard = App.el('div', { class: 'card', style: 'padding:8px 18px' });
+    const listCard = App.el('div', { class: 'card', style: 'padding:6px 18px 8px' });
+    const editing = !!this.editing;
+    listCard.appendChild(App.el('div', { class: 'row between', style: 'padding:12px 4px 4px' }, [
+      App.el('div', { class: 'tag' }, editing ? 'Tippe auf den Papierkorb zum Löschen' : 'Heute zu tun'),
+      App.el('button', { class: 'btn small secondary', style: 'padding:7px 14px', onclick: () => { this.editing = !editing; App.refresh(); } }, [App.icon(editing ? 'check' : 'edit', 14), editing ? 'Fertig' : 'Bearbeiten']),
+    ]));
     const rows = new Map();
     Habits.activeOn(date).forEach((h) => {
       const done = Habits.isDone(date, h.id);
       const cb = App.el('button', { class: 'checkbox' + (done ? ' checked' : ''), html: Icons.check(), 'aria-label': h.name });
-      const row = App.el('div', { class: 'habit' + (done ? ' done' : ''), onclick: () => onToggle(h, row, cb) }, [
-        cb, App.el('div', { class: 'nm' }, h.name), App.el('div', { class: 'xp' }, `+${h.xp} XP`),
+      const trash = App.el('button', { class: 'icon-btn del', 'aria-label': 'Löschen', html: Icons.trash(), onclick: async (e) => {
+        e.stopPropagation();
+        if (!(await App.confirm(`„${h.name}“ löschen?`, { text: 'Bisherige Tage bleiben in deinen Scores erhalten, ab heute zählt sie nicht mehr.' }))) return;
+        row.classList.add('removing');
+        h.archivedDate = App.todayStr();
+        await DB.put('habits', h);
+        setTimeout(() => App.refresh(), 260);
+      } });
+      const row = App.el('div', { class: 'habit' + (done ? ' done' : '') + (editing ? ' editing' : ''), onclick: () => { if (!editing) onToggle(h, row, cb); } }, [
+        cb, App.el('div', { class: 'nm' }, h.name), editing ? trash : App.el('div', { class: 'xp' }, `+${h.xp} XP`),
       ]);
       rows.set(h.id, row);
       listCard.appendChild(row);
