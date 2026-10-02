@@ -27,6 +27,20 @@ const HomeView = {
     wrap.appendChild(hero);
     App.animateNumber(net, sw.net, { decimals: 1, suffix: 'R', signed: true, duration: 1100 });
 
+    // ---- Backup-Erinnerung (nur ohne Cloud-Abgleich, ab 5 Trades, alle 14 Tage) ----
+    const lastBackup = Number(localStorage.getItem('tj_last_backup') || 0);
+    const snoozed = Number(localStorage.getItem('tj_backup_snooze') || 0);
+    if (!Sync.loggedIn() && trades.length >= 5 && Date.now() - lastBackup > 14 * 86400000 && Date.now() > snoozed) {
+      wrap.appendChild(App.el('div', { class: 'card', style: 'border-color:rgba(var(--accent-rgb),.5)' }, [
+        App.el('div', { style: 'font-weight:600;font-size:1.0625rem' }, 'Zeit für ein Backup'),
+        App.el('div', { class: 'tag', style: 'margin:4px 0 16px' }, lastBackup ? `Dein letztes Backup ist ${Math.floor((Date.now() - lastBackup) / 86400000)} Tage alt.` : 'Du hast noch kein Backup erstellt. Deine Daten liegen nur auf diesem Gerät.'),
+        App.el('div', { class: 'btn-row', style: 'margin-top:0' }, [
+          App.el('button', { class: 'btn secondary', onclick: () => { localStorage.setItem('tj_backup_snooze', String(Date.now() + 7 * 86400000)); App.refresh(); } }, 'Später'),
+          App.el('button', { class: 'btn', onclick: async () => { await SettingsView.exportFile(); App.success('Backup gespeichert'); App.refresh(); } }, [App.icon('download'), 'Backup']),
+        ]),
+      ]));
+    }
+
     // ---- Wochenrueckblick (ab Freitag 16 Uhr) ----
     const retro = await WeeklyRetro.pending();
     if (retro) {

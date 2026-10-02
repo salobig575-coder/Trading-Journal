@@ -115,7 +115,7 @@ const WeeklyTracker = {
     } }, [
       App.el('span', { class: 'chev', html: Icons.chevronDown() }),
       App.el('span', { class: 'grow' }, this.weekLabel(w)),
-      App.el('button', { class: 'icon-btn del', html: Icons.trash(), onclick: async (e) => { e.stopPropagation(); if (await App.confirm('Woche löschen?')) { await DB.delete('weeks', w.key); App.refresh(); } } }),
+      App.el('button', { class: 'icon-btn del', html: Icons.trash(), onclick: async (e) => { e.stopPropagation(); if (await App.confirm('Woche löschen?')) { await DB.delete('weeks', w.key); App.refresh(); App.undoToast('Woche gelöscht', () => DB.restore('weeks', w)); } } }),
     ]);
 
     const textInput = (get, set, placeholder) => {

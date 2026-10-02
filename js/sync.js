@@ -73,6 +73,41 @@ const Sync = {
     return data.access_token;
   },
 
+  // ---------- Status ----------
+  state: 'off',
+  setStatus(s) {
+    this.state = s;
+    if (typeof App !== 'undefined' && App.onSyncStatus) App.onSyncStatus(s);
+  },
+
+  // ---------- Konto: Passwort zuruecksetzen, Cloud-Daten loeschen ----------
+  async recover(email) {
+    await this.http('/auth/v1/recover', { method: 'POST', body: { email, redirect_to: location.origin + location.pathname } });
+  },
+
+  // Aus dem Link der Reset-Mail: #access_token=...&type=recovery
+  recoveryFromHash() {
+    const h = new URLSearchParams(location.hash.replace(/^#/, ''));
+    return h.get('type') === 'recovery' && h.get('access_token') ? { token: h.get('access_token') } : null;
+  },
+
+  async setPassword(token, password) {
+    await this.http('/auth/v1/user', { method: 'PUT', body: { password } }, token);
+  },
+
+  async deleteCloudData() {
+    const token = await this.token();
+    const uid = this.session().user.id;
+    await this.http('/rest/v1/journal_data?user_id=eq.' + uid, { method: 'DELETE' }, token);
+    // lokale Sync-Markierungen zuruecksetzen, damit ein spaeterer Abgleich wieder alles hochlaedt
+    for (const s of DB_STORES) {
+      for (const it of await DB.getAll(s)) { if (it._s !== undefined) { const { _s, ...rest } = it; await DB.putRaw(s, rest); } }
+    }
+    await DB.putRaw('settings', { key: '_pullCursor', value: '' });
+    await DB.putRaw('settings', { key: '_tomb', value: [] });
+    this._pushedOnce = false; DB._dirty = true;
+  },
+
   // ---------- Abgleich ----------
   schedule() {
     if (!this.configured() || !this.loggedIn()) return;
@@ -150,6 +185,7 @@ const Sync = {
       this.last = Date.now();
       localStorage.setItem('sb_last', String(this.last));
       this.info = `↓ ${pulled} · ↑ ${pushed}`;
+      this.setStatus('ok');
       if (pulled > 0) {
         await Options.load();
         if (!App.stack.length && !App._modal && !opts.noRefresh) App.refresh();
@@ -157,6 +193,7 @@ const Sync = {
     } catch (e) {
       this.error = e.status === 401 ? 'Anmeldung abgelaufen – bitte neu anmelden.' : e.message;
       if (e.status === 401) this.setSession(null);
+      this.setStatus('error');
     } finally {
       this.running = false;
       if (this._again) { this._again = false; setTimeout(() => this.run(), 400); }
@@ -196,7 +233,18 @@ const Sync = {
     return applied;
   },
 
+  // Nur lesen/senden, wenn sich lokal etwas geaendert hat (spart bei vielen Screenshots viel Arbeit)
   async push(token, uid) {
+    if (!DB._dirty && this._pushedOnce) return 0;
+    DB._dirty = false;
+    try {
+      const n = await this._push(token, uid);
+      this._pushedOnce = true;
+      return n;
+    } catch (e) { DB._dirty = true; throw e; }
+  },
+
+  async _push(token, uid) {
     const rows = [];
     const marks = [];
     for (const store of SYNC_STORES) {

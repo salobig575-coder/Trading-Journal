@@ -2,7 +2,7 @@ const Charts = {
   // Fortschrittsring; node.set(0..1) animiert den Fuellstand
   ring(size, stroke, pct = 0) {
     const r = (size - stroke) / 2, c = 2 * Math.PI * r;
-    const wrap = App.el('div', { class: 'ring', style: `width:${size}px;height:${size}px` });
+    const wrap = App.el('div', { class: 'ring', role: 'img', 'aria-label': 'Fortschritt', style: `width:${size}px;height:${size}px` });
     wrap.innerHTML = `<svg width="${size}" height="${size}" viewBox="0 0 ${size} ${size}">
       <circle class="ring-bg" cx="${size / 2}" cy="${size / 2}" r="${r}" stroke-width="${stroke}"/>
       <circle class="ring-fg" cx="${size / 2}" cy="${size / 2}" r="${r}" stroke-width="${stroke}" stroke-dasharray="${c}" stroke-dashoffset="${c}"/>
@@ -11,7 +11,7 @@ const Charts = {
     let target = pct, ready = false;
     const apply = () => { fg.style.strokeDashoffset = c * (1 - Math.max(0, Math.min(1, target))); };
     // Wert merken, bis das Element im DOM ist – so startet die Animation immer vom leeren Ring
-    wrap.set = (p) => { target = p; if (ready) apply(); };
+    wrap.set = (p) => { target = p; wrap.setAttribute('aria-label', 'Fortschritt ' + Math.round(Math.max(0, Math.min(1, p)) * 100) + ' Prozent'); if (ready) apply(); };
     requestAnimationFrame(() => requestAnimationFrame(() => { ready = true; apply(); }));
     return wrap;
   },
@@ -19,7 +19,7 @@ const Charts = {
   // Kleine Verlaufslinie ohne Achsen (Hero)
   spark(values, opts = {}) {
     const w = 320, h = opts.height || 74, pad = 6;
-    const wrap = App.el('div', { class: 'spark' });
+    const wrap = App.el('div', { class: 'spark', 'aria-hidden': 'true' });
     if (values.length < 2) { return wrap; }
     const min = Math.min(...values), max = Math.max(...values), range = max - min || 1;
     const pts = values.map((v, i) => [pad + (i / (values.length - 1)) * (w - pad * 2), pad + (1 - (v - min) / range) * (h - pad * 2)]);
@@ -54,7 +54,7 @@ const Charts = {
   equity(curve, opts = {}) {
     const width = 340, height = opts.height || 170;
     const padX = 8, padY = 16;
-    const wrap = App.el('div', { class: 'chart-wrap' });
+    const wrap = App.el('div', { class: 'chart-wrap', role: 'img', 'aria-label': 'Verlauf der kumulierten R-Werte' });
     if (!curve.length) { wrap.appendChild(App.el('div', { class: 'tag', style: 'padding:30px 0;text-align:center' }, 'Noch keine abgeschlossenen Trades.')); return wrap; }
 
     const pts = [{ i: 0, value: 0, date: '', trade: null }, ...curve];
@@ -124,7 +124,7 @@ const Charts = {
   bars(points, opts = {}) {
     const width = 340, height = opts.height || 130;
     const padX = 6, padY = 12;
-    const wrap = App.el('div', { class: 'chart-wrap' });
+    const wrap = App.el('div', { class: 'chart-wrap', role: 'img', 'aria-label': 'Balkendiagramm' });
     if (!points.length) { wrap.appendChild(App.el('div', { class: 'tag', style: 'padding:24px 0;text-align:center' }, 'Keine Daten.')); return wrap; }
     const vals = points.map((p) => p.value);
     const max = Math.max(...vals, 0), min = Math.min(...vals, 0);

@@ -4,6 +4,8 @@ const StatsHub = {
   year: new Date().getFullYear(),
   calMonth: App.todayStr().slice(0, 7),
   wlb: 'win',
+  f: { period: 'all', account: 'all', pair: 'all', model: 'all' },
+  filtersOpen: false,
   tabs: [
     { key: 'overview', label: 'Übersicht' },
     { key: 'week', label: 'Woche' },
@@ -16,10 +18,39 @@ const StatsHub = {
   async render() {
     const wrap = App.el('div');
     wrap.appendChild(App.tabBar(this.tabs, this.activeTab, (k) => { this.activeTab = k; App.refresh(); }));
-    const trades = await DB.getAll('trades');
-    if (!trades.length) {
+    const allTrades = await DB.getAll('trades');
+    if (!allTrades.length) {
       wrap.appendChild(App.empty('stats', 'Sobald du Trades einträgst, entstehen hier deine Statistiken.'));
       wrap.appendChild(App.el('button', { class: 'btn secondary', onclick: async () => { await Seed.loadDemo(); App.refresh(); } }, [App.icon('sparkles'), 'Mit Demo-Daten ausprobieren']));
+      return wrap;
+    }
+
+    // Filter: Zeitraum, Konto, Pair, Model (wirken auf alle Tabs)
+    const f = this.f;
+    const accounts = (await DB.getAll('collections')).filter((c) => c.kind === 'account');
+    const uniq = (key) => [...new Set(allTrades.map((t) => t[key]).filter(Boolean))].sort();
+    const periods = [['all', 'Alles'], ['30', '30 Tage'], ['90', '90 Tage'], ['year', 'Dieses Jahr']];
+    const since = f.period === 'all' ? '' : f.period === 'year' ? `${new Date().getFullYear()}-01-01` : App.addDays(App.todayStr(), -Number(f.period));
+    const trades = allTrades.filter((t) =>
+      (!since || t.date >= since) && (f.account === 'all' || t.account === f.account) && (f.pair === 'all' || t.pair === f.pair) && (f.model === 'all' || t.model === f.model));
+    const active = ['period', 'account', 'pair', 'model'].filter((k) => f[k] !== 'all').length;
+    const chips = (key, opts) => App.el('div', { class: 'chip-group' }, [['all', 'Alle'], ...opts].map(([k, label]) => App.el('button', {
+      class: 'chip' + (f[key] === k ? ' active' : ''), onclick: () => { f[key] = k; App.refresh(); },
+    }, label)));
+    const group = (label, node) => App.el('div', {}, [App.el('div', { class: 'lbl-up' }, label), node]);
+    const panel = App.el('div', { class: 'filter-panel' + (this.filtersOpen ? ' open' : '') }, [App.el('div', { class: 'inner' }, [
+      group('Zeitraum', App.el('div', { class: 'chip-group' }, periods.map(([k, label]) => App.el('button', { class: 'chip' + (f.period === k ? ' active' : ''), onclick: () => { f.period = k; App.refresh(); } }, label)))),
+      accounts.length ? group('Konto', chips('account', accounts.map((a) => [a.id, a.name]))) : null,
+      uniq('pair').length > 1 ? group('Pair', chips('pair', uniq('pair').map((p) => [p, p]))) : null,
+      uniq('model').length > 1 ? group('Model', chips('model', uniq('model').map((m) => [m, m]))) : null,
+    ])]);
+    const filterBtn = App.el('button', { class: 'btn small secondary', style: 'position:relative;margin-bottom:var(--s1)' + (active ? ';color:var(--accent)' : ''), onclick: () => { this.filtersOpen = !this.filtersOpen; panel.classList.toggle('open', this.filtersOpen); } }, [
+      App.icon('filter', 16), active ? `Filter (${active})` : 'Filter', active ? App.el('span', { class: 'tag', style: 'margin-left:4px' }, `· ${trades.length} von ${allTrades.length} Trades`) : null,
+    ]);
+    wrap.appendChild(App.el('div', { class: 'filters' }, [filterBtn, panel]));
+    if (!trades.length) {
+      wrap.appendChild(App.empty('filter', 'Keine Trades mit diesen Filtern.'));
+      wrap.appendChild(App.el('button', { class: 'btn secondary', onclick: () => { this.f = { period: 'all', account: 'all', pair: 'all', model: 'all' }; App.refresh(); } }, 'Filter zurücksetzen'));
       return wrap;
     }
     const tab = this.tabs.some((t) => t.key === this.activeTab) ? this.activeTab : 'overview';

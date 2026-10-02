@@ -65,3 +65,12 @@ Bei jedem Release in `sw.js` die Zahl in `CACHE_NAME` erhöhen (z. B. `trading-j
 ## Design-System
 
 Alle Bewegungswerte (`--ease`, `--spring`, `--t-fast/base/slow` = 200/320/440 ms, `--press`, `--stagger`), Abstände (8-pt-Raster), Radien und Schriftgrößen stehen als Tokens oben in `css/style.css`. Animiert wird nur `transform`/`opacity`; `prefers-reduced-motion` wird respektiert. Schrift: SF Pro (Apple) bzw. Inter. Logo: `icons/logo-dark.svg`, `icons/logo-light.svg` (Entwürfe in `design/`).
+
+## Sicherheit, Datenschutz, Qualität
+
+- **App-Sperre per PIN** (Einstellungen → Sicherheit & Daten): schützt vor neugierigen Blicken, verschlüsselt aber nicht.
+- **Passwort vergessen**: in Supabase unter *Authentication → URL Configuration* die Site URL (`https://salobig575-coder.github.io/Trading-Journal/`) eintragen, damit der Link in der Reset-Mail zur App führt.
+- **Registrierung begrenzen**: Sobald alle eingeladenen Personen ein Konto haben, in Supabase unter *Authentication → Sign In / Providers* neue Registrierungen ausschalten.
+- Schrift **Inter lokal** (`fonts/`), keine Google-Abrufe.
+- **Tests**: `tests/index.html` im Browser öffnen (Berechnungen für Winrate, R, Streak, Routine).
+- Entwürfe neuer Trades werden lokal gesichert, Löschen lässt sich per „Rückgängig“ zurücknehmen.

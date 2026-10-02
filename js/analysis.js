@@ -77,7 +77,7 @@ const AnalysisView = {
             App.el('div', { class: 'item-meta' }, `${a.type} · ${App.formatDate(a.date)}`),
             (a.pairs && a.pairs.length) ? App.el('div', { class: 'pills' }, a.pairs.map((p) => UI.pill(p))) : null,
           ]),
-          App.el('button', { class: 'icon-btn del', html: Icons.trash(), onclick: async (e) => { e.stopPropagation(); if (await App.confirm('Analyse löschen?')) { await DB.delete('analyses', a.id); App.refresh(); } } }),
+          App.el('button', { class: 'icon-btn del', html: Icons.trash(), onclick: async (e) => { e.stopPropagation(); if (await App.confirm('Analyse löschen?')) { await DB.delete('analyses', a.id); App.refresh(); App.undoToast('Analyse gelöscht', () => DB.restore('analyses', a)); } } }),
         ]));
       });
     };

@@ -17,6 +17,7 @@ const JournalHub = {
 const JournalView = {
   range: 'all',      // all | today | week | month
   outcome: 'all',    // all | win | loss | be | tape
+  sort: 'new',       // new | old | best | worst
   layout: 'list',    // list | gallery
   q: '',
   filtersOpen: false,
@@ -30,7 +31,7 @@ const JournalView = {
     const chipsFor = (opts, current, set, kinds = {}) => App.el('div', { class: 'chip-group' }, opts.map(([k, label]) => App.el('button', {
       class: `chip ${kinds[k] || ''}` + (current === k ? ' active' : ''), onclick: () => { set(k); App.refresh(); },
     }, label)));
-    const activeFilters = (this.range !== 'all' ? 1 : 0) + (this.outcome !== 'all' ? 1 : 0);
+    const activeFilters = (this.range !== 'all' ? 1 : 0) + (this.outcome !== 'all' ? 1 : 0) + (this.sort !== 'new' ? 1 : 0);
     const searchInput = App.el('input', { type: 'text', placeholder: 'Trades durchsuchen…', value: this.q });
     const filterBtn = App.el('button', {
       class: 'round-btn', style: 'position:relative' + (this.filtersOpen || activeFilters ? ';color:var(--accent)' : ''), 'aria-label': 'Filter',
@@ -43,6 +44,7 @@ const JournalView = {
     const panel = App.el('div', { class: 'filter-panel' + (this.filtersOpen ? ' open' : '') }, [App.el('div', { class: 'inner' }, [
       App.el('div', {}, [App.el('div', { class: 'lbl-up' }, 'Zeitraum'), chipsFor([['all', 'Alle'], ['today', 'Heute'], ['week', 'Woche'], ['month', 'Monat']], this.range, (k) => { this.range = k; })]),
       App.el('div', {}, [App.el('div', { class: 'lbl-up' }, 'Ergebnis'), chipsFor([['all', 'Alle'], ['win', 'Wins'], ['loss', 'Losses'], ['be', 'B/E'], ['tape', 'Tape']], this.outcome, (k) => { this.outcome = k; }, { win: 'win', loss: 'loss', be: 'be' })]),
+      App.el('div', {}, [App.el('div', { class: 'lbl-up' }, 'Sortierung'), chipsFor([['new', 'Neueste'], ['old', 'Älteste'], ['best', 'Bestes R'], ['worst', 'Schlechtestes R']], this.sort, (k) => { this.sort = k; })]),
     ])]);
     wrap.appendChild(panel);
     wrap.appendChild(App.el('div', { style: 'height:8px' }));
@@ -66,6 +68,9 @@ const JournalView = {
       if (this.range === 'month') return (t.date || '').startsWith(this.monthKey);
       return true;
     });
+    if (this.sort === 'old') list.reverse();
+    else if (this.sort === 'best') list.sort((a, b) => Calc.rValue(b) - Calc.rValue(a));
+    else if (this.sort === 'worst') list.sort((a, b) => Calc.rValue(a) - Calc.rValue(b));
 
     const listNode = App.el('div');
     const summaryNode = App.el('div');
@@ -178,7 +183,7 @@ const TradeDetail = {
       App.el('div', { class: 'btn-row wrap' }, [
         App.el('button', { class: 'btn secondary', onclick: () => { App.closeModal(); TradeForm.open(t); } }, [App.icon('edit'), 'Bearbeiten']),
         App.el('button', { class: 'btn secondary', onclick: () => { App.closeModal(); TradeForm.open(null, TradeForm.templateFrom(t)); } }, [App.icon('copy'), 'Duplizieren']),
-        App.el('button', { class: 'btn danger', onclick: async () => { if (await App.confirm('Trade löschen?')) { await DB.delete('trades', t.id); App.closeModal(); App.refresh(); } } }, [App.icon('trash'), 'Löschen']),
+        App.el('button', { class: 'btn danger', onclick: async () => { if (await App.confirm('Trade löschen?')) { await DB.delete('trades', t.id); App.closeModal(); App.refresh(); App.undoToast('Trade gelöscht', () => DB.restore('trades', t)); } } }, [App.icon('trash'), 'Löschen']),
       ]),
       App.el('button', { class: 'btn secondary', style: 'margin-top:10px', onclick: () => App.closeModal() }, 'Schließen'),
     ]);
@@ -200,6 +205,12 @@ const TradeForm = {
 
   async render(existing, template) {
     const t = existing ? { ...existing, images: { ...(existing.images || {}) } } : { ...(template || {}), id: DB.uid(), createdAt: Date.now(), date: App.todayStr(), images: {} };
+
+    // Entwurf: ein halb ausgefuellter neuer Trade bleibt erhalten, falls du unterbrochen wirst
+    const DRAFT_KEY = 'tj_trade_draft';
+    let draft = null;
+    if (!existing && !template) { try { draft = JSON.parse(localStorage.getItem(DRAFT_KEY) || 'null'); } catch (e) {} }
+    if (draft && draft.fields) Object.assign(t, draft.fields);
 
     // Pre-Trade-Check (nur bei neuen Trades): Trading Model abhaken + Warnung bei >= 2 Trades heute
     const modelDoc = existing ? null : await DB.get('checklists', 'tradingModel');
@@ -321,13 +332,28 @@ const TradeForm = {
         }
       }
       await DB.put('trades', out);
+      try { localStorage.removeItem(DRAFT_KEY); } catch (e) {}
       App.success('Trade gespeichert');
       App.closePage();
     };
 
     const card = (...kids) => App.el('div', { class: 'card' }, kids);
     const lastTrade = !existing && !template ? Calc.sort(allTrades).at(-1) : null;
-    return App.el('div', {}, [
+    const snapshot = () => ({
+      trade: title.value, date: date.value, pair: f.pair.get(), ls: f.ls.get(), model: f.model.get(), po3: f.po3.get(),
+      timeframes: f.timeframes.get(), dol: f.dol.get(), result: f.result.get(), rr: rr.value, pnl: pnl.value,
+      psych: psych.value, notes: notes.value, macro: f.macro.get(), rating: f.rating.get(), entryTypes: f.entryTypes.get(),
+      bias: f.bias.get(), pl: f.pl.get(), idea: idea.value, improve: improve.value, mistakes: f.mistakes.get(),
+      account: (accounts.find((a) => a.name === f.account.get()) || {}).id || '', slPoints: sl.value, tpPoints: tp.value,
+    });
+    const draftBanner = draft && draft.fields ? App.el('div', { class: 'card', style: 'padding:var(--s2) var(--s3)' }, [
+      App.el('div', { class: 'row between' }, [
+        App.el('div', {}, [App.el('div', { style: 'font-weight:600' }, 'Entwurf wiederhergestellt'), App.el('div', { class: 'tag' }, `Gespeichert um ${new Date(draft.at).toLocaleTimeString('de-DE', { hour: '2-digit', minute: '2-digit' })} Uhr`)]),
+        App.el('button', { class: 'btn small secondary', onclick: () => { try { localStorage.removeItem(DRAFT_KEY); } catch (e) {} draft = null; App.stack[App.stack.length - 1].render = () => TradeForm.render(null); App.show({ instant: true, dir: 'fade' }); } }, 'Verwerfen'),
+      ]),
+    ]) : null;
+    const root = App.el('div', {}, [
+      draftBanner,
       warnCard,
       checkCard,
       lastTrade ? App.el('button', { class: 'btn secondary', style: 'margin-bottom:16px', onclick: () => { const tpl = TradeForm.templateFrom(lastTrade); App.stack[App.stack.length - 1].render = () => TradeForm.render(null, tpl); App.show({ instant: true }); } }, [App.icon('copy'), 'Setup vom letzten Trade übernehmen']) : null,
@@ -349,5 +375,19 @@ const TradeForm = {
         App.el('button', { class: 'btn', onclick: save }, [App.icon('check'), 'Speichern']),
       ]),
     ]);
+    // Entwurf alle 3 Sekunden sichern, solange das Formular offen ist (nur neue Trades, ohne Bilder)
+    if (!existing && !template) {
+      let last = '';
+      const timer = setInterval(() => {
+        if (!document.body.contains(root)) { clearInterval(timer); return; }
+        const snap = snapshot();
+        const meaningful = snap.trade.trim() || snap.pair || snap.result || snap.notes.trim() || snap.psych.trim() || snap.timeframes.length;
+        const json = JSON.stringify(snap);
+        if (!meaningful || json === last) return;
+        last = json;
+        try { localStorage.setItem(DRAFT_KEY, JSON.stringify({ at: Date.now(), fields: snap })); } catch (e) {}
+      }, 3000);
+    }
+    return root;
   },
 };

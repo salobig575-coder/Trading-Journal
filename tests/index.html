@@ -1,0 +1,76 @@
+<!DOCTYPE html>
+<html lang="de"><head><meta charset="utf-8"><title>Tests · Trading Journal</title>
+<style>body{font:14px -apple-system,Inter,sans-serif;padding:24px;max-width:720px;margin:auto}.ok{color:#1a7f37}.bad{color:#cf222e;font-weight:600}h1{font-size:20px}li{margin:2px 0}</style></head>
+<body><h1>Berechnungs-Tests</h1><p id="sum"></p><ul id="out"></ul>
+<script src="../js/icons.js"></script><script src="../js/db.js"></script><script src="../js/options.js"></script>
+<script src="../js/calc.js"></script><script src="../js/app.js"></script><script src="../js/habits.js"></script>
+<script>
+let pass = 0, fail = 0; const out = document.getElementById('out');
+function eq(name, got, want) {
+  const ok = JSON.stringify(got) === JSON.stringify(want);
+  ok ? pass++ : fail++;
+  const li = document.createElement('li'); li.className = ok ? 'ok' : 'bad';
+  li.textContent = (ok ? '✓ ' : '✗ ') + name + (ok ? '' : ` – erwartet ${JSON.stringify(want)}, erhalten ${JSON.stringify(got)}`);
+  out.appendChild(li);
+}
+const near = (a, b) => Math.abs(a - b) < 1e-9;
+
+// ---- Calc ----
+eq('Win erkannt', Calc.outcome({ result: 'Win' }), 'win');
+eq('Trailing Stop → Loss ist Loss', Calc.outcome({ result: 'Trailing Stop → Loss' }), 'loss');
+eq('BE → Win zählt als Win', Calc.outcome({ result: 'BE → Win' }), 'win');
+eq('Tape ausgeschlossen', Calc.outcome({ result: 'Tape' }), 'tape');
+eq('Fallback über P/L', Calc.outcome({ pl: 'Profit' }), 'win');
+eq('ohne Ergebnis = null', Calc.outcome({}), null);
+eq('R: Win positiv', Calc.rValue({ result: 'Win', rr: 2 }), 2);
+eq('R: Loss negativ (Betrag wird gedreht)', Calc.rValue({ result: 'Loss', rr: 1.5 }), -1.5);
+eq('R: Loss ohne Angabe = -1', Calc.rValue({ result: 'Loss' }), -1);
+eq('R: Tape = 0', Calc.rValue({ result: 'Tape', rr: 3 }), 0);
+eq('$: Loss negativ', Calc.pnl({ result: 'Loss', pnl: 350 }), -350);
+eq('$: Win positiv', Calc.pnl({ result: 'Win', pnl: 500 }), 500);
+const trades = [
+  { date: '2026-01-01', result: 'Win', rr: 2, mistakes: [] }, { date: '2026-01-02', result: 'Loss', rr: 1, mistakes: ['FOMO'] },
+  { date: '2026-01-03', result: 'Win', rr: 3, mistakes: [] }, { date: '2026-01-04', result: 'Tape', rr: 9 },
+];
+const s = Calc.summary(trades);
+eq('Winrate 2 von 3', Math.round(s.winrate * 100) / 100, 66.67);
+eq('Net R = 4', s.net, 4);
+eq('Tape zählt nicht als Trade in der Wertung', s.wins + s.losses, 3);
+eq('Equity-Kurve kumuliert', Calc.curve(trades).map((p) => p.value), [2, 1, 4]);
+eq('Max Drawdown', Calc.maxDrawdown([{ value: 1 }, { value: 3 }, { value: 2 }, { value: 0 }, { value: 4 }]), 3);
+eq('Gruppierung nach Fehler', Calc.group(trades, (t) => t.mistakes || []).map((r) => [r.key, r.n, r.net]), [['FOMO', 1, -1]]);
+eq('Profit Factor', Calc.summary(trades).profitFactor, 5);
+
+// ---- Routine (Habits) ----
+const mk = (id, xp, parentId) => ({ id, name: id, xp, createdDate: '2026-01-01', parentId });
+Habits.weekend = false;
+Habits.habits = [mk('a', 3), mk('b', 2), mk('k', 1, 'a')];
+const done = (date, ...ids) => ids.forEach((id) => Habits.logs.set(Habits.logId(date, id), { id: Habits.logId(date, id), date, habitId: id, done: true }));
+Habits.logs = new Map();
+done('2026-01-05', 'a');                       // Montag: nur a (3 von 5)
+eq('Tag: 60 % bei 3 von 5 XP', Habits.day('2026-01-05').pct, 0.6);
+eq('Tag: nicht komplett', Habits.day('2026-01-05').complete, false);
+done('2026-01-05', 'b');
+eq('Tag: komplett bei allen Haupt-Gewohnheiten', Habits.day('2026-01-05').complete, true);
+eq('Unterpunkt zählt nicht zum Ziel (max bleibt 5)', Habits.day('2026-01-05').max, 5);
+done('2026-01-05', 'k');
+eq('Unterpunkt bringt Extra-XP, wenn Haupt erledigt', Habits.day('2026-01-05').extra, 1);
+eq('Extra-XP nur bei erledigter Hauptgewohnheit', (Habits.logs.delete(Habits.logId('2026-01-05', 'a')), Habits.day('2026-01-05').extra), 0);
+done('2026-01-05', 'a');
+for (const d of ['2026-01-06', '2026-01-07', '2026-01-08', '2026-01-09']) done(d, 'a', 'b');
+eq('Woche: perfekt (Mo–Fr komplett)', Habits.range(Habits.weekDates('2026-01-07')).complete, true);
+eq('Wochenende zählt nicht (kein Streak-Bruch)', Habits.scored('2026-01-10'), false);
+Habits.weekend = true;
+eq('Wochenende zählt, wenn aktiviert', Habits.scored('2026-01-10'), true);
+Habits.weekend = false;
+eq('Streak über das Wochenende hinweg', Habits.streak('2026-01-12'), 5);   // Montag danach noch offen -> bricht nicht
+done('2026-01-12', 'a', 'b');
+eq('Streak wächst mit heutigem Tag', Habits.streak('2026-01-12'), 6);
+Habits.logs.delete(Habits.logId('2026-01-07', 'b'));
+eq('Streak bricht bei verpasstem Tag', Habits.streak('2026-01-12'), 3);
+eq('Bester Streak ≥ 3', Habits.best() >= 3, true);
+
+document.getElementById('sum').textContent = `${pass} bestanden, ${fail} fehlgeschlagen`;
+document.getElementById('sum').className = fail ? 'bad' : 'ok';
+window.__testResult = { pass, fail };
+</script></body></html>

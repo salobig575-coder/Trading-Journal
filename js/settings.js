@@ -24,6 +24,7 @@ const SettingsView = {
       ]),
       this.syncCard(),
       await this.rulesCard(),
+      this.securityCard(),
       App.el('div', { class: 'card' }, [
         App.el('h2', {}, [App.icon('journal', 14), 'Auswahllisten']),
         App.el('p', { class: 'tag' }, 'Pairs, Models, PO3, Entry-Setups, DoL, Macros, Ergebnisse … passe alle Listen an dein Modell an.'),
@@ -41,7 +42,8 @@ const SettingsView = {
         App.el('p', { class: 'tag' }, 'Alle Daten liegen lokal auf diesem Gerät. Mit dem Backup (.json) kannst du sie sichern oder auf ein anderes Gerät (z. B. PC ↔ Handy) übertragen.'),
         App.el('button', { class: 'btn', style: 'margin-bottom:8px', onclick: () => this.exportFile() }, [App.icon('download'), 'Backup exportieren']),
         App.el('button', { class: 'btn secondary', style: 'margin-bottom:8px', onclick: () => fileInput.click() }, [App.icon('upload'), 'Backup importieren']),
-        App.el('button', { class: 'btn secondary', onclick: () => this.exportCsv() }, [App.icon('download'), 'Trades als Tabelle (CSV)']),
+        App.el('button', { class: 'btn secondary', style: 'margin-bottom:8px', onclick: () => this.exportCsv() }, [App.icon('download'), 'Trades als Tabelle (CSV)']),
+        App.el('button', { class: 'btn secondary', onclick: () => { App.closeModal(); setTimeout(() => Importer.open(), 340); } }, [App.icon('upload'), 'Trades aus CSV importieren']),
         fileInput,
       ]),
       App.el('div', { class: 'card' }, [
@@ -91,6 +93,11 @@ const SettingsView = {
           App.el('button', { class: 'btn secondary', onclick: go((e, p) => Sync.signUp(e, p)) }, 'Registrieren'),
         ]));
         if (msg) note(msg, 'tag neg');
+        card.appendChild(App.el('button', { class: 'add-line', onclick: async () => {
+          if (!email.value.trim()) { msg = 'Gib oben deine E-Mail ein, dann sende ich dir einen Link.'; draw(); return; }
+          try { await Sync.recover(email.value.trim()); msg = 'Wenn die Adresse existiert, ist ein Link zum Zurücksetzen unterwegs.'; } catch (e) { msg = 'Das hat nicht geklappt: ' + e.message; }
+          draw();
+        } }, 'Passwort vergessen?'));
         if (!Sync.config().fromFile) card.appendChild(App.el('button', { class: 'add-line', onclick: () => { localStorage.removeItem('sb_cfg'); draw(); } }, 'Projekt-Zugangsdaten ändern'));
         return;
       }
@@ -108,6 +115,52 @@ const SettingsView = {
   },
 
   // Eigene Trading-Regeln: loesen Warnungen beim Anlegen eines Trades aus
+  // Sicherheit, Datenschutz, Hilfe
+  securityCard() {
+    const lockOn = Privacy.enabled();
+    const rowBtn = (icon, label, fn, cls = 'secondary') => App.el('button', { class: 'btn ' + cls, style: 'margin-top:8px', onclick: fn }, [App.icon(icon), label]);
+    const card = App.el('div', { class: 'card' }, [
+      App.el('h2', {}, [App.icon('shield', 14), 'Sicherheit & Daten']),
+      App.switchRow('App-Sperre (PIN)', 'Fragt beim Öffnen und nach 30 s im Hintergrund nach einer 4-stelligen PIN.', lockOn, (on) => {
+        App.closeModal();
+        setTimeout(() => {
+          if (on) Privacy.setupFlow(() => this.open());
+          else if (Privacy.enabled()) Privacy.verify(() => { Privacy.disable(); App.toast('PIN entfernt'); this.open(); });
+        }, 340);
+      }),
+      rowBtn('shield', 'Datenschutz', () => { App.closeModal(); setTimeout(() => Privacy.open(), 340); }),
+      rowBtn('sparkles', 'Kurzanleitung', () => { App.closeModal(); setTimeout(() => Onboarding.show(false), 340); }),
+      rowBtn('alert', 'Fehlerprotokoll', () => { App.closeModal(); setTimeout(() => this.errorLog(), 340); }),
+    ]);
+    if (Sync.loggedIn()) card.appendChild(rowBtn('trash', 'Cloud-Daten löschen', async () => {
+      if (!(await App.confirm('Cloud-Daten löschen?', { text: 'Alle bei Supabase gespeicherten Einträge werden entfernt. Auf diesem Gerät bleibt alles erhalten.', ok: 'Löschen' }))) return;
+      try { await Sync.deleteCloudData(); Sync.signOut(); App.success('Cloud-Daten gelöscht'); App.closeModal(); } catch (e) { App.toast('Das hat nicht geklappt: ' + e.message); }
+    }, 'danger'));
+    card.appendChild(rowBtn('trash', 'Alle lokalen Daten löschen', async () => {
+      if (!(await App.confirm('Alle Daten auf diesem Gerät löschen?', { text: 'Trades, Analysen, Routine und Einstellungen werden entfernt. Erstelle vorher ein Backup, wenn du sie behalten willst.', ok: 'Alles löschen' }))) return;
+      if (Sync.loggedIn()) Sync.signOut(); // sonst wuerde der Abgleich alles sofort wiederherstellen
+      await DB.wipeLocal();
+      ['tj_trade_draft', 'tj_errors', 'tj_last_backup', 'sb_last', 'riskcalc'].forEach((k) => { try { localStorage.removeItem(k); } catch (e) {} });
+      location.reload();
+    }, 'danger'));
+    return card;
+  },
+
+  errorLog() {
+    let list = [];
+    try { list = JSON.parse(localStorage.getItem('tj_errors') || '[]'); } catch (e) {}
+    const text = list.map((e) => `${e.t}  ${e.m}`).join('\n') || 'Keine Fehler protokolliert.';
+    App.showModal(App.el('div', {}, [
+      App.el('h3', {}, 'Fehlerprotokoll'),
+      App.el('p', { class: 'tag', style: 'margin:-12px 0 16px' }, 'Hilfreich, falls etwas nicht klappt. Die letzten 20 Einträge, nur auf diesem Gerät.'),
+      App.el('div', { class: 'text-block', style: 'font-size:.75rem;max-height:40vh;overflow:auto' }, text),
+      App.el('div', { class: 'btn-row' }, [
+        App.el('button', { class: 'btn secondary', onclick: () => { try { localStorage.removeItem('tj_errors'); } catch (e) {} App.closeModal(); } }, 'Leeren'),
+        App.el('button', { class: 'btn', onclick: async () => { try { await navigator.clipboard.writeText(text); App.success('Kopiert'); } catch (e) { App.toast('Kopieren nicht möglich'); } } }, 'Kopieren'),
+      ]),
+    ]));
+  },
+
   async rulesCard() {
     const rules = await DB.getSetting('riskRules', { maxTrades: 2, lossStreak: 2, dailyLossR: 2 });
     const mk = (key, label, step) => {
@@ -180,6 +233,7 @@ const SettingsView = {
     const a = document.createElement('a');
     a.href = url;
     a.download = `trading-journal-backup-${App.todayStr()}.json`;
+    try { localStorage.setItem('tj_last_backup', String(Date.now())); } catch (e) {}
     document.body.appendChild(a);
     a.click();
     a.remove();

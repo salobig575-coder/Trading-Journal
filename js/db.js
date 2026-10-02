@@ -4,7 +4,7 @@ const DB_STORES = ['trades', 'analyses', 'collections', 'checklists', 'weeks', '
 // Stores mit "id" als Schluessel (alle anderen nutzen "key")
 const DB_ID_STORES = ['trades', 'analyses', 'collections', 'habits', 'habitLogs'];
 // Einstellungen, die mit der Cloud abgeglichen werden
-const DB_SYNC_SETTINGS = ['options', 'habitSettings', 'riskRules'];
+const DB_SYNC_SETTINGS = ['options', 'habitSettings', 'riskRules', 'onboarded'];
 
 function openDB() {
   return new Promise((resolve, reject) => {
@@ -50,18 +50,27 @@ function openDB() {
 
 const dbPromise = openDB();
 
+const DB_CACHED = ['trades', 'analyses', 'collections', 'habitLogs', 'habits'];
+
 const DB = {
+  _cache: {},
+  _dirty: true,
+
   uid() {
     return Date.now().toString(36) + Math.random().toString(36).slice(2, 8);
   },
 
+  // Lese-Cache: haeufig gelesene Stores werden bis zur naechsten Aenderung im Speicher gehalten
   async getAll(storeName) {
+    if (DB_CACHED.includes(storeName) && this._cache[storeName]) return this._cache[storeName].slice();
     const db = await dbPromise;
-    return new Promise((resolve, reject) => {
+    const rows = await new Promise((resolve, reject) => {
       const req = db.transaction(storeName, 'readonly').objectStore(storeName).getAll();
       req.onsuccess = () => resolve(req.result);
       req.onerror = () => reject(req.error);
     });
+    if (DB_CACHED.includes(storeName)) this._cache[storeName] = rows;
+    return rows.slice();
   },
 
   async get(storeName, key) {
@@ -83,16 +92,17 @@ const DB = {
   async putRaw(storeName, obj) {
     const db = await dbPromise;
     return new Promise((resolve, reject) => {
+      this._cache[storeName] = null;
       const tx = db.transaction(storeName, 'readwrite');
       tx.objectStore(storeName).put(obj);
-      tx.oncomplete = () => resolve(obj);
+      tx.oncomplete = () => { this._cache[storeName] = null; resolve(obj); };
       tx.onerror = () => reject(tx.error);
     });
   },
 
   async put(storeName, obj) {
     const sync = this.syncable(storeName, obj);
-    if (sync) obj._u = Date.now();
+    if (sync) { obj._u = Date.now(); this._dirty = true; }
     await this.putRaw(storeName, obj);
     if (sync && this.onChange) this.onChange();
     return obj;
@@ -101,13 +111,15 @@ const DB = {
   async putMany(storeName, items) {
     const db = await dbPromise;
     const stamp = Date.now();
+    this._cache[storeName] = null;
     await new Promise((resolve, reject) => {
       const tx = db.transaction(storeName, 'readwrite');
       const store = tx.objectStore(storeName);
       items.forEach((it) => { if (this.syncable(storeName, it)) it._u = stamp; store.put(it); });
-      tx.oncomplete = () => resolve(items);
+      tx.oncomplete = () => { this._cache[storeName] = null; resolve(items); };
       tx.onerror = () => reject(tx.error);
     });
+    this._dirty = true;
     if (this.onChange) this.onChange();
     return items;
   },
@@ -115,28 +127,54 @@ const DB = {
   // Loeschen ohne Tombstone (wenn die Loeschung aus der Cloud kommt)
   async delete_raw(storeName, key) {
     const db = await dbPromise;
+    this._cache[storeName] = null;
     return new Promise((resolve, reject) => {
       const tx = db.transaction(storeName, 'readwrite');
       tx.objectStore(storeName).delete(key);
-      tx.oncomplete = () => resolve();
+      tx.oncomplete = () => { this._cache[storeName] = null; resolve(); };
       tx.onerror = () => reject(tx.error);
     });
   },
 
   async delete(storeName, key) {
     const db = await dbPromise;
+    this._cache[storeName] = null;
     await new Promise((resolve, reject) => {
       const tx = db.transaction(storeName, 'readwrite');
       tx.objectStore(storeName).delete(key);
-      tx.oncomplete = () => resolve();
+      tx.oncomplete = () => { this._cache[storeName] = null; resolve(); };
       tx.onerror = () => reject(tx.error);
     });
     if (this.syncable(storeName, { key })) {
       const tomb = await this.getSetting('_tomb', []);
       tomb.push({ store: storeName, id: key, u: Date.now() });
       await this.putRaw('settings', { key: '_tomb', value: tomb });
+      this._dirty = true;
       if (this.onChange) this.onChange();
     }
+  },
+
+  // Rueckgaengig nach dem Loeschen: Tombstone entfernen und Datensatz neu speichern
+  async restore(storeName, obj) {
+    const key = DB_ID_STORES.includes(storeName) ? obj.id : obj.key;
+    const tomb = (await this.getSetting('_tomb', [])).filter((t) => !(t.store === storeName && t.id === key));
+    await this.putRaw('settings', { key: '_tomb', value: tomb });
+    return this.put(storeName, obj);
+  },
+
+  // Alle lokalen Daten entfernen (Einstellungen zum Konto/Theme bleiben nicht erhalten)
+  async wipeLocal() {
+    const db = await dbPromise;
+    for (const s of DB_STORES) {
+      await new Promise((resolve, reject) => {
+        const tx = db.transaction(s, 'readwrite');
+        tx.objectStore(s).clear();
+        tx.oncomplete = () => resolve();
+        tx.onerror = () => reject(tx.error);
+      });
+    }
+    this._cache = {};
+    this._dirty = true;
   },
 
   async getSetting(key, fallback) {

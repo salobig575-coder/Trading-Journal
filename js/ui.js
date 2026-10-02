@@ -42,7 +42,7 @@ const UI = {
   },
 
   // Bild -> verkleinerter JPEG als Data-URL
-  compressImage(file, maxSide = 1400, quality = 0.82) {
+  compressImage(file, maxSide = 1280, quality = 0.7) {
     return new Promise((resolve, reject) => {
       const reader = new FileReader();
       reader.onerror = () => reject(reader.error);

@@ -14,6 +14,8 @@ const App = {
       await Options.load();
       await Seed.run();
     } catch (e) { console.warn(e); }
+    try { Privacy.start(); } catch (e) { console.warn(e); }
+    const recovery = (typeof Sync !== 'undefined' && Sync.recoveryFromHash) ? Sync.recoveryFromHash() : null;
 
     document.getElementById('settingsBtn').innerHTML = Icons.settings();
     document.getElementById('backBtn').innerHTML = Icons.back();
@@ -30,8 +32,18 @@ const App = {
     document.getElementById('navBack').addEventListener('click', () => this.back());
     this.setupNavbar();
     window.addEventListener('popstate', () => { if (this.stack.length) { this.stack.pop(); this.show({ instant: true, dir: 'pop' }); } });
-    window.addEventListener('error', (e) => { console.warn(e.message); });
-    window.addEventListener('unhandledrejection', (e) => { console.warn(e.reason); });
+    window.addEventListener('error', (e) => { this.logError(e.message); });
+    window.addEventListener('unhandledrejection', (e) => {
+      const r = e.reason || {};
+      this.logError(r.message || r);
+      if (r.name === 'QuotaExceededError') this.toast('Speicher voll – exportiere ein Backup und entferne alte Screenshots.');
+      else if (r.name === 'DataError' || r.name === 'TransactionInactiveError' || r.name === 'AbortError') this.toast('Das hat gerade nicht geklappt. Bitte versuche es nochmal.');
+    });
+    window.addEventListener('offline', () => this.setOffline(true));
+    window.addEventListener('online', () => this.setOffline(false));
+    if (!navigator.onLine) this.setOffline(true);
+    this.applyTextScale();
+    document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'visible') this.applyTextScale(); });
 
     const hash = location.hash.replace('#', '');
     this.navigate(this.routes[hash] ? hash : 'home', { instant: true });
@@ -43,7 +55,64 @@ const App = {
     setTimeout(() => {
       splash.classList.add('hide');
       setTimeout(() => splash.remove(), 480);
+      setTimeout(() => {
+        if (recovery) this.recoverySheet(recovery);
+        else Onboarding.maybeShow().catch(() => {});
+      }, 700);
     }, 1200);
+  },
+
+  // Neues Passwort setzen, nachdem du den Link aus der Reset-Mail geoeffnet hast
+  recoverySheet(rec) {
+    const pw = this.el('input', { type: 'password', autocomplete: 'new-password', placeholder: 'Neues Passwort (mind. 6 Zeichen)' });
+    const msg = this.el('div', { class: 'tag neg', style: 'min-height:1.3em;margin-bottom:8px' });
+    this.showModal(this.el('div', {}, [
+      this.el('h3', {}, 'Neues Passwort'),
+      this.el('div', { class: 'field' }, [this.el('label', {}, 'Passwort'), pw]), msg,
+      this.el('button', { class: 'btn', onclick: async () => {
+        if (pw.value.length < 6) { msg.textContent = 'Mindestens 6 Zeichen.'; return; }
+        try { await Sync.setPassword(rec.token, pw.value); this.closeModal(); this.success('Passwort geändert – bitte melde dich an'); } catch (e) { msg.textContent = 'Das hat nicht geklappt: ' + e.message; }
+      } }, 'Speichern'),
+    ]));
+  },
+
+  // ---------- Fehler, Offline, Textgroesse ----------
+  logError(msg) {
+    console.warn(msg);
+    try {
+      const list = JSON.parse(localStorage.getItem('tj_errors') || '[]');
+      list.push({ t: new Date().toISOString(), m: String(msg).slice(0, 300) });
+      localStorage.setItem('tj_errors', JSON.stringify(list.slice(-20)));
+    } catch (e) {}
+  },
+
+  setOffline(off) {
+    let pill = document.getElementById('offlinePill');
+    if (!pill) {
+      pill = this.el('div', { id: 'offlinePill', class: 'offline-pill', role: 'status' }, 'Offline – Änderungen werden später abgeglichen');
+      document.body.appendChild(pill);
+    }
+    setTimeout(() => pill.classList.toggle('show', !!off), 30);
+  },
+
+  // Sync-Status: roter Punkt am Zahnrad, wenn der letzte Abgleich fehlgeschlagen ist
+  onSyncStatus(state) {
+    const btn = document.getElementById('settingsBtn');
+    if (btn) btn.classList.toggle('has-alert', state === 'error');
+  },
+
+  // iOS "Textgroesse" (Dynamic Type) respektieren: Wurzel-Schriftgroesse skaliert, alles in rem folgt
+  applyTextScale() {
+    try {
+      if (!(window.CSS && CSS.supports && CSS.supports('font', '-apple-system-body'))) return;
+      const probe = document.createElement('span');
+      probe.style.cssText = 'font:-apple-system-body;position:absolute;visibility:hidden';
+      probe.textContent = 'A';
+      document.body.appendChild(probe);
+      const px = parseFloat(getComputedStyle(probe).fontSize);
+      probe.remove();
+      if (px > 0) document.documentElement.style.fontSize = Math.min(135, Math.max(90, (px / 17) * 100)) + '%';
+    } catch (e) {}
   },
 
   // ---------- Bewegung: zentrale Tokens ----------
@@ -133,6 +202,7 @@ const App = {
 
     document.querySelectorAll('.dock button.tab').forEach((btn) => btn.classList.toggle('active', btn.dataset.route === this.current && !inPage));
     const title = top ? top.title : route.title;
+    document.title = title + ' · Trading Journal';
     document.getElementById('pageTitle').textContent = title;
     document.getElementById('pageSub').textContent = top ? '' : route.over();
     document.getElementById('navTitle').textContent = title;
@@ -253,7 +323,31 @@ const App = {
       if (c == null || c === false) continue;
       node.appendChild(typeof c === 'string' || typeof c === 'number' ? document.createTextNode(String(c)) : c);
     }
+    this.a11y(node, tag, attrs);
     return node;
+  },
+
+  // Barrierefreiheit automatisch: anklickbare Flaechen per Tastatur bedienbar, Icon-Knoepfe beschriftet
+  a11y(node, tag, attrs) {
+    if (tag === 'div' && typeof attrs.onclick === 'function' && !/modal-backdrop|lightbox/.test(node.className) && !node.hasAttribute('role')) {
+      node.setAttribute('role', 'button');
+      node.tabIndex = 0;
+      node.addEventListener('keydown', (e) => { if ((e.key === 'Enter' || e.key === ' ') && e.target === node) { e.preventDefault(); node.click(); } });
+    }
+    if (tag === 'button' && attrs.html && !node.getAttribute('aria-label') && !node.textContent.trim()) {
+      const label = this.iconLabel(attrs.html);
+      if (label) node.setAttribute('aria-label', label);
+    }
+  },
+
+  _iconLabels: null,
+  iconLabel(html) {
+    if (!this._iconLabels) {
+      const names = { trash: 'Löschen', edit: 'Bearbeiten', plus: 'Hinzufügen', close: 'Schließen', back: 'Zurück', chevronLeft: 'Zurück', chevronRight: 'Weiter', chevronDown: 'Aufklappen', search: 'Suchen', settings: 'Einstellungen', filter: 'Filter', grid: 'Galerie', list: 'Liste', copy: 'Einfügen', check: 'Erledigt', download: 'Herunterladen', upload: 'Hochladen', grip: 'Verschieben' };
+      this._iconLabels = {};
+      for (const [k, label] of Object.entries(names)) { try { this._iconLabels[Icons[k]()] = label; } catch (e) {} }
+    }
+    return this._iconLabels[html] || '';
   },
 
   icon(name, size = 16) {
@@ -261,8 +355,8 @@ const App = {
   },
 
   tabBar(tabs, activeKey, onChange) {
-    const bar = this.el('div', { class: 'seg' }, tabs.map((t) =>
-      this.el('button', { class: 'seg-tab' + (t.key === activeKey ? ' active' : ''), onclick: () => onChange(t.key) }, t.label)
+    const bar = this.el('div', { class: 'seg', role: 'tablist' }, tabs.map((t) =>
+      this.el('button', { class: 'seg-tab' + (t.key === activeKey ? ' active' : ''), role: 'tab', 'aria-selected': String(t.key === activeKey), onclick: () => onChange(t.key) }, t.label)
     ));
     requestAnimationFrame(() => {
       const active = bar.querySelector('.seg-tab.active');
@@ -272,12 +366,15 @@ const App = {
   },
 
   switchRow(label, desc, checked, onChange) {
-    const sw = this.el('div', { class: 'switch' + (checked ? ' on' : '') });
-    sw.addEventListener('click', () => {
+    const sw = this.el('div', { class: 'switch' + (checked ? ' on' : ''), role: 'switch', tabindex: '0', 'aria-checked': String(!!checked), 'aria-label': label });
+    const toggle = () => {
       const next = !sw.classList.contains('on');
       sw.classList.toggle('on', next);
+      sw.setAttribute('aria-checked', String(next));
       onChange(next);
-    });
+    };
+    sw.addEventListener('click', toggle);
+    sw.addEventListener('keydown', (e) => { if (e.key === ' ' || e.key === 'Enter') { e.preventDefault(); toggle(); } });
     const textCol = [this.el('div', { class: 'switch-label' }, label)];
     if (desc) textCol.push(this.el('div', { class: 'switch-desc' }, desc));
     return this.el('div', { class: 'switch-row' }, [this.el('div', { class: 'grow' }, textCol), sw]);
@@ -286,7 +383,7 @@ const App = {
   // Sheet mit Griff: per Ziehen nach unten schliessbar (wie iOS)
   makeSheet(contentNode, z, dismiss) {
     const backdrop = this.el('div', { class: 'modal-backdrop', style: z ? `z-index:${z}` : '', onclick: (e) => { if (e.target === backdrop) dismiss(); } });
-    const modal = this.el('div', { class: 'modal' });
+    const modal = this.el('div', { class: 'modal', role: 'dialog', 'aria-modal': 'true' });
     const grab = this.el('div', { class: 'grab', 'aria-hidden': 'true' });
     modal.append(grab, contentNode);
     backdrop.appendChild(modal);
@@ -350,11 +447,21 @@ const App = {
   },
 
   toast(msg) { this._toast(msg, false); },
+
+  // Hinweis mit "Rueckgaengig" (z. B. nach dem Loeschen)
+  undoToast(msg, undo) {
+    this._toast(msg, false);
+    const t = document.getElementById('toast');
+    t.classList.add('act');
+    t.appendChild(this.el('button', { class: 'toast-act', onclick: async () => { t.classList.remove('show'); try { await undo(); this.refresh(); } catch (e) { this.logError(e.message); } } }, 'Rückgängig'));
+    clearTimeout(this._toastT);
+    this._toastT = setTimeout(() => t.classList.remove('show'), 5200);
+  },
   // Erfolgsmoment: kurzer Haken, der sich zeichnet
   success(msg) { this._toast(msg, true); },
   _toast(msg, ok) {
     let t = document.getElementById('toast');
-    if (!t) { t = this.el('div', { id: 'toast', class: 'toast' }); document.body.appendChild(t); }
+    if (!t) { t = this.el('div', { id: 'toast', class: 'toast', role: 'status', 'aria-live': 'polite' }); document.body.appendChild(t); }
     t.className = 'toast' + (ok ? '' : ' plain');
     t.innerHTML = `<span class="ok">${Icons.check()}</span>`;
     t.appendChild(document.createTextNode(msg));
