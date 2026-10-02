@@ -33,9 +33,7 @@ const App = {
     const hash = location.hash.replace('#', '');
     this.navigate(this.routes[hash] ? hash : 'home', { instant: true });
 
-    if ('serviceWorker' in navigator && (location.protocol === 'http:' || location.protocol === 'https:')) {
-      navigator.serviceWorker.register('sw.js').catch(() => {});
-    }
+    if ('serviceWorker' in navigator && (location.protocol === 'http:' || location.protocol === 'https:')) this.registerSW();
     try { Sync.start(); } catch (e) { console.warn(e); }
 
     const splash = document.getElementById('splash');
@@ -43,6 +41,46 @@ const App = {
       splash.classList.add('hide');
       setTimeout(() => splash.remove(), 700);
     }, 1500);
+  },
+
+  // ---------- Updates ----------
+  registerSW() {
+    navigator.serviceWorker.register('sw.js').then((reg) => {
+      const offer = () => this.updateBar(reg);
+      if (reg.waiting && navigator.serviceWorker.controller) offer();
+      reg.addEventListener('updatefound', () => {
+        const nw = reg.installing;
+        if (!nw) return;
+        nw.addEventListener('statechange', () => { if (nw.state === 'installed' && navigator.serviceWorker.controller) offer(); });
+      });
+      const check = () => reg.update().catch(() => {});
+      document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'visible') check(); });
+      window.addEventListener('online', check);
+      setInterval(check, 20 * 60 * 1000);
+    }).catch(() => {});
+    let reloading = false;
+    navigator.serviceWorker.addEventListener('controllerchange', () => {
+      if (reloading || !this._updating) return;
+      reloading = true;
+      location.reload();
+    });
+  },
+
+  updateBar(reg) {
+    if (document.getElementById('updateBar')) return;
+    const bar = this.el('div', { id: 'updateBar', class: 'update-bar' }, [
+      this.el('div', { class: 'ic', html: Icons.sparkles() }),
+      this.el('div', { class: 'grow' }, [this.el('div', { class: 't' }, 'Neue Version verfügbar'), this.el('div', { class: 's' }, 'Kurz neu laden, um sie zu nutzen.')]),
+      this.el('button', { class: 'btn small', onclick: (e) => {
+        e.currentTarget.textContent = 'Lädt …';
+        this._updating = true;
+        const w = reg.waiting;
+        if (w) w.postMessage({ type: 'SKIP_WAITING' }); else location.reload();
+      } }, 'Neu laden'),
+      this.el('button', { class: 'icon-btn', 'aria-label': 'Später', html: Icons.close(), onclick: () => { bar.classList.remove('show'); setTimeout(() => bar.remove(), 500); } }),
+    ]);
+    document.body.appendChild(bar);
+    setTimeout(() => bar.classList.add('show'), 80);
   },
 
   // ---------- Navigation ----------

@@ -1,4 +1,4 @@
-const CACHE_NAME = 'trading-journal-v6';
+const CACHE_NAME = 'trading-journal-v7';
 const ASSETS = [
   './',
   './index.html',
@@ -28,8 +28,13 @@ const ASSETS = [
   './icons/icon-512.png',
 ];
 
+// Neue Version wartet, bis die App sie ueber die "Neue Version"-Leiste freigibt (kein Reload mitten im Tippen)
 self.addEventListener('install', (event) => {
-  event.waitUntil(caches.open(CACHE_NAME).then((cache) => cache.addAll(ASSETS)).then(() => self.skipWaiting()));
+  event.waitUntil(caches.open(CACHE_NAME).then((cache) => cache.addAll(ASSETS)));
+});
+
+self.addEventListener('message', (event) => {
+  if (event.data && event.data.type === 'SKIP_WAITING') self.skipWaiting();
 });
 
 self.addEventListener('activate', (event) => {

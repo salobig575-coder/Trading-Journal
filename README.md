@@ -47,3 +47,7 @@ Einrichtung:
 5. In der App: Einstellungen → Cloud-Sync → **Registrieren**, auf dem Handy dann mit denselben Daten **Anmelden**.
 
 Zusätzlich gibt es unter **Einstellungen → Backup** einen JSON-Export/-Import.
+
+## Neue Version ausliefern
+
+Bei jedem Release in `sw.js` die Zahl in `CACHE_NAME` erhöhen (z. B. `trading-journal-v8`). Offene Apps zeigen dann unten „Neue Version verfügbar“ mit Button **Neu laden**.
