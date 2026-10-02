@@ -1,4 +1,4 @@
-const CACHE_NAME = 'trading-journal-v15';
+const CACHE_NAME = 'trading-journal-v16';
 const ASSETS = [
   './',
   './index.html',
@@ -34,6 +34,7 @@ const ASSETS = [
   './js/sync.js',
   './js/shortcuts.js',
   './js/haptics.js',
+  './js/swipe.js',
   './js/art.js',
   './js/dictate.js',
   './icons/logo-dark.svg',

@@ -832,3 +832,4 @@ kbd { display: inline-block; min-width: 22px; padding: 2px 7px; border-radius: 7
 .dict-btn.live { background: var(--loss); color: #fff; animation: dictPulse 1.3s ease-in-out infinite; }
 @keyframes dictPulse { 0%, 100% { box-shadow: 0 0 0 0 rgba(255, 90, 80, 0.5); } 50% { box-shadow: 0 0 0 9px rgba(255, 90, 80, 0); } }
 .dict-wrap textarea { padding-right: 52px; }
+.ic-badge svg { width: 55%; height: 55%; flex-shrink: 0; }

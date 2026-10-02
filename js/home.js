@@ -45,7 +45,7 @@ const HomeView = {
     const retro = await WeeklyRetro.pending();
     if (retro) {
       wrap.appendChild(App.el('button', { class: 'card row', style: 'width:100%;text-align:left;gap:16px;cursor:pointer;border-color:rgba(var(--accent-rgb),.5)', onclick: () => WeeklyRetro.open(retro) }, [
-        App.el('div', { class: 'ic', style: 'width:44px;height:44px;border-radius:14px;background:var(--accent-soft);color:var(--accent);display:flex;align-items:center;justify-content:center;flex-shrink:0', html: Icons.review() }),
+        App.el('div', { class: 'ic ic-badge', style: 'width:44px;height:44px;border-radius:14px;background:var(--accent-soft);color:var(--accent);display:flex;align-items:center;justify-content:center;flex-shrink:0', html: Icons.review() }),
         App.el('div', { class: 'grow' }, [App.el('div', { style: 'font-weight:600;font-size:16px' }, 'Wochenrückblick'), App.el('div', { class: 'tag' }, 'Zwei Minuten: Was lief gut, was änderst du?')]),
         App.el('span', { html: Icons.chevronRight(), style: 'width:18px;height:18px;color:var(--dim)' }),
       ]));
@@ -88,7 +88,7 @@ const LibraryPage = {
 
   render() {
     const row = (icon, t, s, fn) => App.el('div', { class: 'item clickable', onclick: fn }, [
-      App.el('div', { class: 'ic', style: 'width:40px;height:40px;border-radius:13px;background:var(--accent-soft);color:var(--accent);display:flex;align-items:center;justify-content:center;flex-shrink:0', html: Icons[icon]() }),
+      App.el('div', { class: 'ic ic-badge', style: 'width:40px;height:40px;border-radius:13px;background:var(--accent-soft);color:var(--accent);display:flex;align-items:center;justify-content:center;flex-shrink:0', html: Icons[icon]() }),
       App.el('div', { class: 'grow' }, [App.el('div', { class: 'item-title' }, t), App.el('div', { class: 'item-meta' }, s)]),
       App.el('span', { html: Icons.chevronRight(), style: 'width:18px;height:18px;color:var(--dim)' }),
     ]);
