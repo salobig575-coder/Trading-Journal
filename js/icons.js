@@ -45,4 +45,16 @@ const Icons = {
   review() { return this.wrap('<path d="M4.5 12a7.5 7.5 0 1 0 2.4-5.5"/><path d="M4.5 4.5v4h4"/><path d="M12 8v4.2l2.6 1.6"/>'); },
   flag() { return this.wrap('<path d="M6 21V4"/><path d="M6 5h11l-2 4 2 4H6"/>'); },
   copy() { return this.wrap('<rect x="9" y="9" width="11" height="11" rx="2"/><path d="M15 9V6.8A1.8 1.8 0 0 0 13.2 5H6.8A1.8 1.8 0 0 0 5 6.8v6.4A1.8 1.8 0 0 0 6.8 15H9"/>'); },
+  // Gefuellte Varianten fuer den aktiven Tab (Ruhezustand = duenne Linie, aktiv = Flaeche)
+  fill(name) {
+    const cut = 'stroke="var(--bg)" stroke-width="1.8"';
+    const v = {
+      home: '<path fill="currentColor" d="M12 3.4 3.5 10.9a1.1 1.1 0 0 0 .75 1.9H6v6.4A1.8 1.8 0 0 0 7.8 21H10v-5.4h4V21h2.2a1.8 1.8 0 0 0 1.8-1.8v-6.4h1.75a1.1 1.1 0 0 0 .75-1.9L12 3.4Z"/>',
+      journal: `<path fill="currentColor" d="M6 3.5h11.5a.9.9 0 0 1 .9.9v15.2a.9.9 0 0 1-.9.9H6a2 2 0 0 1-2-2V5.5a2 2 0 0 1 2-2Z"/><path ${cut} d="M8.5 3.5v17M12 8h3.5M12 11.5h3.5"/>`,
+      routine: `<circle cx="12" cy="12" r="9" fill="currentColor"/><path ${cut} d="m8.3 12.3 2.6 2.6 4.9-5.4"/>`,
+      stats: '<rect x="4.5" y="12" width="4" height="8.5" rx="1.6" fill="currentColor"/><rect x="10" y="4" width="4" height="16.5" rx="1.6" fill="currentColor"/><rect x="15.5" y="9" width="4" height="11.5" rx="1.6" fill="currentColor"/>',
+    };
+    return this.wrap(v[name] || '');
+  },
+  mic() { return this.wrap('<rect x="9" y="3.5" width="6" height="11" rx="3"/><path d="M5.5 11.5a6.5 6.5 0 0 0 13 0M12 18v2.5"/>'); },
 };

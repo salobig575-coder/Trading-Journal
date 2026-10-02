@@ -42,6 +42,7 @@ const Fx = {
   },
 
   celebrate(emoji, title, sub, power = 1) {
+    if (typeof Haptics !== "undefined") { Haptics.success(); if (power >= 1.5) setTimeout(() => Haptics.heavy(), 320); }
     this.confetti(power);
     document.querySelectorAll('.celebrate').forEach((n) => n.remove());
     const card = App.el('div', { class: 'celebrate' }, [

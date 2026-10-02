@@ -20,7 +20,9 @@ const App = {
     document.getElementById('settingsBtn').innerHTML = Icons.settings();
     document.getElementById('backBtn').innerHTML = Icons.back();
     document.querySelectorAll('.dock button.tab').forEach((btn) => {
-      btn.querySelector('.ic').innerHTML = Icons[this.routes[btn.dataset.route].icon]();
+      // Zwei Zustaende pro Tab: duenne Linie im Ruhezustand, gefuellte Form wenn aktiv
+      const ic = this.routes[btn.dataset.route].icon;
+      btn.querySelector('.ic').innerHTML = `<span class="i-off">${Icons[ic]()}</span><span class="i-on">${Icons.fill(ic)}</span>`;
       btn.addEventListener('click', () => this.navigate(btn.dataset.route));
     });
     const fab = document.getElementById('fab');
@@ -185,6 +187,11 @@ const App = {
   // ---------- Navigation ----------
   navigate(route, opts = {}) {
     if (!this.routes[route]) route = 'home';
+    // Richtung des Tab-Wechsels: Seite gleitet von rechts herein, wenn der neue Tab weiter rechts liegt
+    const order = Object.keys(this.routes);
+    const step = order.indexOf(route) - order.indexOf(this.current);
+    const slide = !this.stack.length && step !== 0 && !opts.instant && !this.reducedMotion();
+    if (slide && !opts.dir) opts = { ...opts, dir: step > 0 ? 'tabR' : 'tabL' };
     this.current = route;
     this.stack = [];
     if (route === 'routine' && typeof RoutineView !== 'undefined') { RoutineView.date = null; RoutineView.editing = false; }
@@ -238,7 +245,7 @@ const App = {
       view.appendChild(this.skeleton());
     }, 140);
 
-    if (swapIn) view.classList.add('leaving');
+    if (swapIn) { view.classList.add('leaving'); if (dir === 'tabR') view.classList.add('to-left'); else if (dir === 'tabL') view.classList.add('to-right'); }
 
     const finish = (node) => {
       if (token !== this._token) return;
@@ -250,7 +257,13 @@ const App = {
       if (node) view.appendChild(node);
       void view.offsetWidth;
       view.classList.add('enter-' + dir);
-      if (dir !== 'fade') this.stagger(view);
+      if (dir !== 'fade') { this.stagger(view); this.countUp(view); }
+      // Gerade gespeicherter Eintrag: kurzer goldener Lichtstreifen + Scroll in Sicht
+      if (this.justSaved) {
+        const id = this.justSaved; this.justSaved = null;
+        const row = [...view.querySelectorAll('[data-fid]')].find((n) => n.dataset.fid === id);
+        if (row && !this.reducedMotion()) { row.classList.add('fresh-sweep'); setTimeout(() => row.classList.remove('fresh-sweep'), 1700); }
+      }
       if (opts.keepScroll) window.scrollTo(0, y); else window.scrollTo(0, 0);
     };
     Promise.resolve().then(() => renderFn()).catch((e) => { console.warn(e); return this.empty('alert', 'Das konnte gerade nicht geladen werden.'); }).then((node) => {
@@ -297,6 +310,30 @@ const App = {
     };
     collect(view);
     items.slice(0, 8).forEach((el, i) => { el.style.setProperty('--i', i); el.classList.add('rv'); });
+  },
+
+  // Kennzahlen zaehlen beim Einblenden von 0 hoch (nur Zahlen ohne Tausenderpunkt, endet exakt auf dem echten Text)
+  countUp(root) {
+    if (this.reducedMotion()) return;
+    root.querySelectorAll('.stat-tile .num, .stat .num, .score-line .pct').forEach((el) => {
+      if (el.children.length) return;
+      const text = el.textContent.trim();
+      const m = text.match(/^([+\-−]?)(\d+(?:[.,]\d+)?)(\D*)$/);
+      if (!m || /^\d{1,3}(\.\d{3})+/.test(m[2])) return;
+      const target = parseFloat(m[2].replace(',', '.'));
+      if (!isFinite(target) || target === 0) return;
+      const dec = (m[2].split(/[.,]/)[1] || '').length, sep = m[2].includes(',') ? ',' : '.';
+      const t0 = performance.now(), dur = 760;
+      let last = '';
+      const tick = (now) => {
+        if (!el.isConnected || (last && el.textContent !== last)) return;   // wurde inzwischen von anderem Code geaendert
+        const p = Math.min(1, (now - t0) / dur), e = 1 - Math.pow(1 - p, 3);
+        last = p >= 1 ? text : m[1] + (target * e).toFixed(dec).replace('.', sep) + m[3];
+        el.textContent = last;
+        if (p < 1) requestAnimationFrame(tick);
+      };
+      requestAnimationFrame(tick);
+    });
   },
 
   goTab(route, hub, tab) {
@@ -483,7 +520,7 @@ const App = {
     this._toastT = setTimeout(() => t.classList.remove('show'), 5200);
   },
   // Erfolgsmoment: kurzer Haken, der sich zeichnet
-  success(msg) { this._toast(msg, true); },
+  success(msg) { this._toast(msg, true); if (typeof Haptics !== 'undefined') Haptics.success(); },
   _toast(msg, ok) {
     let t = document.getElementById('toast');
     if (!t) { t = this.el('div', { id: 'toast', class: 'toast', role: 'status', 'aria-live': 'polite' }); document.body.appendChild(t); }
@@ -584,7 +621,11 @@ const App = {
     return 'Noch wach';
   },
 
-  empty(iconName, text) {
-    return this.el('div', { class: 'empty' }, [this.el('div', { class: 'empty-icon', html: Icons[iconName]() }), text]);
+  // Leerer Zustand: kleine Figur mit Bewegung statt nacktem Icon (faellt auf das Icon zurueck)
+  empty(iconName, text, sub) {
+    const top = typeof Art !== 'undefined' && Art.has(iconName)
+      ? Art.scene(iconName, 150)
+      : this.el('div', { class: 'empty-icon', html: Icons[iconName]() });
+    return this.el('div', { class: 'empty' }, [top, this.el('div', { class: 'empty-text' }, text), sub ? this.el('div', { class: 'empty-sub' }, sub) : null]);
   },
 };

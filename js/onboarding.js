@@ -1,10 +1,10 @@
 // Willkommens-Tour (einmalig) und Kurzanleitung
 const Onboarding = {
   slides: [
-    { icon: 'sparkles', title: 'Willkommen', text: 'Dein Trading-Journal, deine Routine und deine Zahlen – ruhig und an einem Ort.' },
-    { icon: 'trend', title: 'Trades festhalten', text: 'Tippe unten auf das goldene Plus. Gib R:R als positiven Betrag ein, das Vorzeichen ergibt sich aus dem Ergebnis.' },
-    { icon: 'routine', title: 'Routine aufbauen', text: 'Hake täglich deine Gewohnheiten ab. Unterpunkte erscheinen, sobald die Hauptgewohnheit erledigt ist.' },
-    { icon: 'shield', title: 'Sicher und überall', text: 'Mit dem Cloud-Abgleich bist du am Handy und am PC auf dem gleichen Stand. Eine PIN schützt die App, ein Backup sichert dich ab.' },
+    { icon: 'sparkles', art: 'hello', title: 'Willkommen', text: 'Dein Trading-Journal, deine Routine und deine Zahlen – ruhig und an einem Ort.' },
+    { icon: 'trend', art: 'journal', title: 'Trades festhalten', text: 'Tippe unten auf das goldene Plus. Gib R:R als positiven Betrag ein, das Vorzeichen ergibt sich aus dem Ergebnis.' },
+    { icon: 'routine', art: 'sun', title: 'Routine aufbauen', text: 'Hake täglich deine Gewohnheiten ab. Unterpunkte erscheinen, sobald die Hauptgewohnheit erledigt ist.' },
+    { icon: 'shield', art: 'wallet', title: 'Sicher und überall', text: 'Mit dem Cloud-Abgleich bist du am Handy und am PC auf dem gleichen Stand. Eine PIN schützt die App, ein Backup sichert dich ab.' },
   ],
 
   async maybeShow() {
@@ -15,7 +15,7 @@ const Onboarding = {
   show(first) {
     let i = 0;
     const track = App.el('div', { class: 'tour-track' }, this.slides.map((s) => App.el('div', { class: 'tour-slide' }, [
-      App.el('div', { class: 'ic', html: Icons[s.icon]() }), App.el('h3', {}, s.title), App.el('p', {}, s.text),
+      s.art ? Art.scene(s.art, 150) : App.el('div', { class: 'ic', html: Icons[s.icon]() }), App.el('h3', {}, s.title), App.el('p', {}, s.text),
     ])));
     const dots = App.el('div', { class: 'tour-dots' }, this.slides.map(() => App.el('i')));
     const next = App.el('button', { class: 'btn' }, 'Weiter');

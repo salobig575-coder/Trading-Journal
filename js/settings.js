@@ -31,6 +31,11 @@ const SettingsView = {
           },
         }, label))),
       ]),
+      Haptics.supported() ? App.el('div', { class: 'card' }, [
+        App.el('h2', {}, [App.icon('sparkles', 14), 'Gefühl']),
+        App.switchRow('Haptisches Feedback', 'Feines Tippen bei Tabs, Haken und Speichern – stärker beim Löschen. Am iPhone ab iOS 18.', Haptics.enabled(), (on) => { Haptics.set(on); if (on) Haptics.medium(); }),
+        App.el('div', { class: 'btn-row wrap', style: 'margin-top:var(--s1)' }, [['Leicht', 'light'], ['Mittel', 'medium'], ['Stark', 'heavy']].map(([label, fn]) => App.el('button', { class: 'btn secondary small', 'data-no-haptic': '', onclick: () => Haptics[fn]() }, label))),
+      ]) : null,
       this.syncCard(),
       await this.rulesCard(),
       this.securityCard(),

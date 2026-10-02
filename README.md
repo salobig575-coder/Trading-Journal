@@ -26,6 +26,15 @@ Tägliche Gewohnheiten mit XP-Gewichtung: Tages-Ring, Wochen-Score (Mo–Fr, Woc
 
 Ab 1024 px Breite (mit Maus) wird die untere Leiste zur Seitenleiste. Tastenkürzel: **H** Heute · **J** Journal · **R** Routine · **S** Statistik · **N** neuer Trade · **/** Suche · **?** Übersicht.
 
+## Gefühl & Feinschliff
+
+- **Tab-Wechsel:** Die Seite gleitet aus der Richtung herein, in der der Tab liegt. Bei „Bewegung reduzieren“ (iOS) entfällt das.
+- **Tab-Symbole:** dünne Linie im Ruhezustand, gefüllte Form im aktiven Zustand (`Icons.fill`).
+- **Haptik** (`js/haptics.js`): drei Stufen – leicht (Auswahl, Haken), mittel (Tabs, Plus, Speichern), stark (Löschen); Erfolgsmomente doppelt. Android per Vibration, iPhone ab iOS 18 über den System-Tick. In den Einstellungen abschaltbar.
+- **Speichern-Rückmeldung:** Der Speichern-Knopf wird zum grünen Haken, danach leuchtet der neue Eintrag in der Liste kurz golden auf. Kennzahlen zählen beim Einblenden hoch.
+- **Illustrationen** (`js/art.js`): „Kerzo“, eine kleine animierte Kerze, in leeren Zuständen, der Tour und am Ruhetag. Alles aus SVG/CSS; eigene Illustrationen lassen sich pro Szene über `Art.custom[name]` einsetzen.
+- **Kleine Überraschungen:** Pair und Konto sind vorausgewählt, wenn du sie fast immer nimmst. Diktieren-Knopf in Notizfeldern erkennt „Nasdaq“, „Euro Dollar“ oder „e s“ und trägt NQ, EURUSD, ES ein.
+
 ## Bilder
 
 Screenshots liegen in einem eigenen Speicher (`images`) statt in den Trades. Das hält Liste, Abgleich und Export schnell; ältere Einträge werden einmalig automatisch umgezogen.

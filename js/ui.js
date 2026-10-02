@@ -86,6 +86,30 @@ const UI = {
     return App.el('div', { class: 'field' }, [label ? App.el('label', {}, label) : null, node]);
   },
 
+  // Speichern-Knopf mit Rueckmeldung: Spinner (nur wenn es dauert) -> Haken auf gruenem Grund -> dann weiter.
+  // work() gibt false zurueck, wenn nicht gespeichert wurde (z. B. fehlende Eingabe): der Knopf springt zurueck.
+  // Danach wird after() aufgerufen. Gibt das Ergebnis von work() zurueck.
+  async morph(btn, work, after) {
+    if (!btn || btn.classList.contains('morph')) return false;
+    const label = [...btn.childNodes];
+    const w = btn.offsetWidth;
+    btn.style.minWidth = w + 'px';
+    btn.classList.add('morph');
+    const spin = setTimeout(() => { btn.replaceChildren(App.el('span', { class: 'm-in' }, [App.el('span', { class: 'spin' })])); }, 160);
+    let ok;
+    try { ok = await work(); } catch (e) { ok = false; App.logError && App.logError(e.message); App.toast('Das hat gerade nicht geklappt. Bitte versuche es nochmal.'); }
+    clearTimeout(spin);
+    if (ok === false) { btn.replaceChildren(...label); btn.classList.remove('morph'); btn.style.minWidth = ''; return false; }
+    btn.classList.add('is-done');
+    btn.replaceChildren(App.el('span', { class: 'm-in', html: Icons.check() }));
+    if (typeof Haptics !== 'undefined') Haptics.success();
+    await new Promise((r) => setTimeout(r, App.reducedMotion() ? 0 : 560));
+    if (after) await after();
+    // Falls der Knopf noch im Bild ist (z. B. Dialog bleibt offen), zuruecksetzen
+    if (btn.isConnected) { btn.replaceChildren(...label); btn.classList.remove('morph', 'is-done'); btn.style.minWidth = ''; }
+    return true;
+  },
+
   // Chip-Auswahl (Einzel- oder Mehrfachauswahl). node.get() liefert den Wert.
   chips(options, selected, opts = {}) {
     const multi = !!opts.multi;

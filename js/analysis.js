@@ -70,7 +70,7 @@ const AnalysisView = {
       if (!rows.length) { list.appendChild(App.empty('analyse', 'Keine Analysen gefunden.')); return; }
       rows.forEach((a, i) => {
         const tpl = AnalysisTemplates[a.type];
-        list.appendChild(App.el('div', { class: 'item clickable', onclick: () => this.edit(a) }, [
+        list.appendChild(App.el('div', { class: 'item clickable', 'data-fid': a.id, onclick: () => this.edit(a) }, [
           App.el('span', { html: Icons[tpl ? tpl.icon : 'journal'](), style: 'width:22px;height:22px;color:var(--accent);flex-shrink:0' }),
           App.el('div', { class: 'grow' }, [
             App.el('div', { class: 'item-title' }, a.name || a.type),
@@ -195,9 +195,10 @@ const AnalysisView = {
       const out = { ...a, name: nameInput.value.trim() || this.defaultName(a.type, dateInput.value), date: dateInput.value || a.date, pairs: pairs.get(), fields: {}, images: {}, updatedAt: Date.now() };
       Object.entries(getters).forEach(([k, fn]) => { const [kind, key] = k.split(':'); (kind === 'f' ? out.fields : out.images)[key] = fn(); });
       await DB.put('analyses', out);
-      App.success('Analyse gespeichert');
-      App.closePage();
+      App.justSaved = out.id;
+      return true;
     };
+    const finish = () => { App.success('Analyse gespeichert'); App.closePage(); };
 
     return App.el('div', {}, [
       App.el('div', { class: 'card' }, [
@@ -208,7 +209,7 @@ const AnalysisView = {
       body,
       App.el('div', { class: 'btn-row' }, [
         App.el('button', { class: 'btn secondary', onclick: () => App.back() }, 'Abbrechen'),
-        App.el('button', { class: 'btn', onclick: save }, [App.icon('check'), 'Speichern']),
+        App.el('button', { class: 'btn', onclick: (e) => UI.morph(e.currentTarget, save, finish) }, [App.icon('check'), 'Speichern']),
       ]),
     ]);
   },
@@ -247,6 +248,9 @@ const WeeklyRetro = {
       rec.name = `Weekly Review CW${week}`;
       rec.fields = { ...(rec.fields || {}), performance: summary, done: good.value, improve: better.value, emotions: mood.get() };
       await DB.put('analyses', rec);
+      return true;
+    };
+    const finish = () => {
       App.closeModal();
       App.refresh();
       Fx.celebrate('📝', 'Rückblick gespeichert', 'Du findest ihn unter Journal → Analysen.', 0.6);
@@ -260,7 +264,7 @@ const WeeklyRetro = {
       UI.field('Wie hast du dich gefühlt?', mood),
       App.el('div', { class: 'btn-row' }, [
         App.el('button', { class: 'btn secondary', onclick: () => App.closeModal() }, 'Später'),
-        App.el('button', { class: 'btn', onclick: save }, [App.icon('check'), 'Speichern']),
+        App.el('button', { class: 'btn', onclick: (e) => UI.morph(e.currentTarget, save, finish) }, [App.icon('check'), 'Speichern']),
       ]),
     ]));
   },

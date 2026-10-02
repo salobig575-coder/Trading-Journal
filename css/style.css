@@ -755,3 +755,80 @@ kbd { display: inline-block; min-width: 22px; padding: 2px 7px; border-radius: 7
   .dock button.tab:hover:not(.active) { background: var(--fill); }
   .side-hint { display: block; margin-top: auto; padding: var(--s2) 10px 0; font-size: var(--fs-cap); color: var(--dim); }
 }
+
+/* =========================================================
+   Illustrationen (Kerzo), Tab-Wechsel, Rueckmeldungen
+   ========================================================= */
+.art { margin: 0 auto var(--s2); animation: artIn var(--t-slow) var(--spring) both; }
+.art svg { display: block; width: 100%; height: auto; overflow: visible; }
+@keyframes artIn { from { opacity: 0; transform: translateY(10px) scale(0.92); } to { opacity: 1; transform: none; } }
+.art-body { animation: artFloat 3.6s ease-in-out infinite; transform-box: fill-box; }
+.art-shadow { animation: artShadow 3.6s ease-in-out infinite; transform-box: fill-box; transform-origin: center; }
+.art-eye { animation: artBlink 5s infinite; transform-box: fill-box; transform-origin: center; }
+.art-spark { animation: artTwinkle 2.6s ease-in-out infinite; transform-box: fill-box; }
+.art-wave { animation: artWave 1.6s ease-in-out infinite; transform-box: fill-box; transform-origin: 0% 100%; }
+.art-bar { animation: artGrow 2.8s var(--ease) infinite; transform-box: fill-box; transform-origin: 50% 100%; animation-delay: var(--d, 0s); }
+.art-zzz { animation: artZ 3.2s ease-in-out infinite; animation-delay: var(--d, 0s); opacity: 0; }
+.art-lens { animation: artLens 4s ease-in-out infinite; transform-box: fill-box; }
+.art-sun { animation: artSun 4.4s ease-in-out infinite; transform-box: fill-box; transform-origin: 50% 80%; }
+.art-pop { animation: artPop 3.4s var(--spring) infinite; transform-box: fill-box; transform-origin: 50% 100%; }
+.art-check { stroke-dasharray: 1; stroke-dashoffset: 1; animation: artDraw 3.4s var(--ease) infinite; }
+@keyframes artFloat { 0%, 100% { transform: translateY(0); } 50% { transform: translateY(-5px); } }
+@keyframes artShadow { 0%, 100% { transform: scaleX(1); opacity: 0.12; } 50% { transform: scaleX(0.86); opacity: 0.07; } }
+@keyframes artBlink { 0%, 92%, 100% { transform: scaleY(1); } 95% { transform: scaleY(0.1); } }
+@keyframes artTwinkle { 0%, 100% { opacity: 0.25; transform: scale(0.7); } 50% { opacity: 1; transform: scale(1.1); } }
+@keyframes artWave { 0%, 100% { transform: rotate(0); } 50% { transform: rotate(-16deg); } }
+@keyframes artGrow { 0%, 100% { transform: scaleY(0.82); } 50% { transform: scaleY(1); } }
+@keyframes artZ { 0% { opacity: 0; transform: translate(-6px, 8px); } 30%, 70% { opacity: 1; } 100% { opacity: 0; transform: translate(6px, -8px); } }
+@keyframes artLens { 0%, 100% { transform: translate(0, 0); } 50% { transform: translate(-6px, 2px); } }
+@keyframes artSun { 0%, 100% { transform: scale(1); } 50% { transform: scale(1.06); } }
+@keyframes artPop { 0%, 12% { transform: scale(0); } 22%, 80% { transform: scale(1); } 92%, 100% { transform: scale(0); } }
+@keyframes artDraw { 0%, 22% { stroke-dashoffset: 1; } 40%, 80% { stroke-dashoffset: 0; } 100% { stroke-dashoffset: 1; } }
+.empty .art + .empty-text, .empty-text { max-width: 32ch; margin: 0 auto; }
+.empty .empty-sub { margin-top: var(--s1); font-size: var(--fs-sub); }
+.tour-slide .art { margin: 0 auto var(--s2); }
+
+/* Tab-Wechsel: die Seite gleitet aus der Richtung herein, in die der Tab liegt */
+@keyframes enterTabR { from { opacity: 0; transform: translateX(36px); } to { opacity: 1; transform: none; } }
+@keyframes enterTabL { from { opacity: 0; transform: translateX(-36px); } to { opacity: 1; transform: none; } }
+#view.enter-tabR { animation: enterTabR var(--t-slow) var(--ease) both; }
+#view.enter-tabL { animation: enterTabL var(--t-slow) var(--ease) both; }
+#view.leaving.to-left { transform: translateX(-24px); transition: opacity 140ms ease, transform 160ms ease; }
+#view.leaving.to-right { transform: translateX(24px); transition: opacity 140ms ease, transform 160ms ease; }
+
+/* Tab-Symbole: duenn im Ruhezustand, gefuellt und kraeftiger, wenn aktiv */
+.dock button.tab .ic { position: relative; display: block; width: 24px; height: 24px; }
+.dock button.tab .ic > span { position: absolute; inset: 0; transition: opacity var(--t-base) var(--ease), transform var(--t-base) var(--spring); }
+.dock button.tab .ic svg { width: 24px; height: 24px; }
+.dock button.tab .i-off svg { stroke-width: 1.6; }
+.dock button.tab .i-on { opacity: 0; transform: scale(0.7); }
+.dock button.tab .i-on svg { stroke-width: 1.8; }
+.dock button.tab.active .i-off { opacity: 0; transform: scale(0.7); }
+.dock button.tab.active .i-on { opacity: 1; transform: none; }
+.dock button.tab.active svg { transform: none; }
+.dock button.tab.active .i-on { color: var(--accent); }
+@media (min-width: 1024px) and (hover: hover) and (pointer: fine) { .dock button.tab .ic { display: block; } }
+
+/* Speichern-Knopf: Haken wandelt sich ein, Farbe springt auf Gruen */
+.btn.morph { pointer-events: none; transition: background var(--t-base) var(--ease), transform var(--t-base) var(--spring), color var(--t-base); }
+.btn.morph.is-done { background: var(--win); color: #fff; transform: scale(1.03); }
+.btn.morph .m-in { display: inline-flex; align-items: center; gap: 8px; animation: pop var(--t-base) var(--spring) both; }
+.btn.morph .m-in svg { width: 20px; height: 20px; stroke-width: 3; }
+.btn.morph .m-in path { stroke-dasharray: 1; stroke-dashoffset: 1; animation: artDrawOnce var(--t-slow) var(--ease) 80ms forwards; }
+@keyframes artDrawOnce { to { stroke-dashoffset: 0; } }
+.btn.morph .spin { width: 18px; height: 18px; border-radius: 50%; border: 2.5px solid currentColor; border-right-color: transparent; animation: spin 0.7s linear infinite; }
+@keyframes spin { to { transform: rotate(360deg); } }
+
+/* Neu angelegte Eintraege: goldener Lichtstreifen wandert einmal ueber die Zeile */
+.fresh-sweep { position: relative; overflow: hidden; }
+.fresh-sweep::before { content: ""; position: absolute; inset: 0; z-index: 1; pointer-events: none; background: linear-gradient(105deg, transparent 20%, rgba(var(--accent-rgb), 0.28) 50%, transparent 80%); transform: translateX(-100%); animation: sweep 1.1s var(--ease) 0.15s 1 both; }
+@keyframes sweep { to { transform: translateX(100%); } }
+
+/* Diktier-Knopf an Textfeldern */
+.dict-wrap { position: relative; }
+.dict-btn { position: absolute; right: 8px; bottom: 8px; width: 36px; height: 36px; border-radius: 50%; border: none; background: var(--accent-soft); color: var(--accent); display: flex; align-items: center; justify-content: center; transition: transform var(--t-fast) var(--spring), background var(--t-base); }
+.dict-btn svg { width: 18px; height: 18px; }
+.dict-btn:active { transform: scale(var(--press-sm)); }
+.dict-btn.live { background: var(--loss); color: #fff; animation: dictPulse 1.3s ease-in-out infinite; }
+@keyframes dictPulse { 0%, 100% { box-shadow: 0 0 0 0 rgba(255, 90, 80, 0.5); } 50% { box-shadow: 0 0 0 9px rgba(255, 90, 80, 0); } }
+.dict-wrap textarea { padding-right: 52px; }

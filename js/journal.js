@@ -111,7 +111,7 @@ const JournalView = {
       trades.forEach((t, i) => {
         const cover = this.firstImage(t);
         const r = Calc.rValue(t);
-        g.appendChild(App.el('div', { class: 'g-card', onclick: () => TradeDetail.open(t) }, [
+        g.appendChild(App.el('div', { class: 'g-card', 'data-fid': t.id, onclick: () => TradeDetail.open(t) }, [
           (() => { const c = App.el('div', { class: 'g-cover' }, t.pair || '·'); if (cover) Img.fillBg(c, cover, t.pair || '·'); return c; })(),
           App.el('div', { class: 'g-body' }, [
             App.el('div', { class: 'tt' }, t.trade || t.pair || 'Trade'),
@@ -131,7 +131,7 @@ const JournalView = {
     const o = Calc.outcome(t);
     const r = Calc.rValue(t);
     const meta = [App.formatDate(t.date), t.pair, t.ls, t.model].filter(Boolean).join(' · ');
-    return App.el('div', { class: 'item clickable', onclick: () => TradeDetail.open(t) }, [
+    return App.el('div', { class: 'item clickable', 'data-fid': t.id, onclick: () => TradeDetail.open(t) }, [
       App.el('div', { class: 'side-bar ' + (o === 'win' ? 'win' : o === 'loss' ? 'loss' : o === 'be' ? 'be' : '') }),
       App.el('div', { class: 'grow', style: 'padding-left:6px' }, [
         App.el('div', { class: 'item-title' }, t.trade || t.pair || 'Trade'),
@@ -217,6 +217,20 @@ const TradeForm = {
     const allTrades = existing ? [] : await DB.getAll('trades');
     const rules = await DB.getSetting('riskRules', { maxTrades: 2, lossStreak: 2, dailyLossR: 2 });
     const accounts = (await DB.getAll('collections')).filter((c) => c.kind === 'account' && !c.closed);
+    // Kleine Ueberraschung: Pair und Konto sind vorausgewaehlt, wenn du sie fast immer nimmst (jederzeit abwaehlbar)
+    let autoPair = false;
+    if (!existing && !template && !draft && allTrades.length >= 3) {
+      const recent = Calc.sort(allTrades).slice(-12);
+      const top = (key) => {
+        const n = {}; recent.forEach((x) => { if (x[key]) n[x[key]] = (n[x[key]] || 0) + 1; });
+        const best = Object.entries(n).sort((a, b) => b[1] - a[1])[0];
+        return best && best[1] / recent.length >= 0.6 ? best[0] : '';
+      };
+      const p = top('pair');
+      if (p && !t.pair && Options.get('pairs').includes(p)) { t.pair = p; autoPair = true; }
+      const acc = top('account');
+      if (acc && !t.account && accounts.some((a) => a.id === acc)) t.account = acc;
+    }
     const warnings = [];
     if (!existing) {
       const todayTrades = allTrades.filter((x) => x.date === App.todayStr());
@@ -307,7 +321,7 @@ const TradeForm = {
     } }, [App.icon('plus'), 'Mehr Felder']);
 
     const save = async () => {
-      if (!date.value) { App.toast('Bitte ein Datum wählen.'); return; }
+      if (!date.value) { App.toast('Bitte ein Datum wählen.'); return false; }
       const out = {
         ...t,
         trade: title.value.trim(), date: date.value, day: App.weekdayName(date.value),
@@ -333,9 +347,10 @@ const TradeForm = {
       }
       await DB.put('trades', out);
       try { localStorage.removeItem(DRAFT_KEY); } catch (e) {}
-      App.success('Trade gespeichert');
-      App.closePage();
+      App.justSaved = out.id;   // Eintrag bekommt in der Liste einen kurzen Lichtstreifen
+      return true;
     };
+    const finish = () => { App.success('Trade gespeichert'); App.closePage(); };
 
     const card = (...kids) => App.el('div', { class: 'card' }, kids);
     const lastTrade = !existing && !template ? Calc.sort(allTrades).at(-1) : null;
@@ -360,7 +375,7 @@ const TradeForm = {
       card(
         UI.field('Trade', title),
         App.el('div', { class: 'field-grid' }, [UI.field('Datum', App.el('div', {}, [date, dayLbl])), UI.field('R:R (Betrag)', App.el('div', {}, [rr, App.el('div', { class: 'tag', style: 'margin-top:6px' }, 'Vorzeichen folgt dem Ergebnis')]))]),
-        UI.field('Pair', f.pair), UI.field('Long / Short', f.ls),
+        UI.field('Pair', autoPair ? App.el('div', {}, [f.pair, App.el('div', { class: 'tag', style: 'margin-top:6px' }, 'Vorausgewählt: dein häufigstes Pair der letzten Trades')]) : f.pair), UI.field('Long / Short', f.ls),
       ),
       card(UI.field('Model', f.model), UI.field('PO3', f.po3), UI.field('Entry (Setup / Timeframe)', f.timeframes), UI.field('DoL', f.dol)),
       card(
@@ -372,7 +387,7 @@ const TradeForm = {
       moreBtn, more,
       App.el('div', { class: 'btn-row' }, [
         App.el('button', { class: 'btn secondary', onclick: () => App.back() }, 'Abbrechen'),
-        App.el('button', { class: 'btn', onclick: save }, [App.icon('check'), 'Speichern']),
+        App.el('button', { class: 'btn', onclick: (e) => UI.morph(e.currentTarget, save, finish) }, [App.icon('check'), 'Speichern']),
       ]),
     ]);
     // Entwurf alle 3 Sekunden sichern, solange das Formular offen ist (nur neue Trades, ohne Bilder)
