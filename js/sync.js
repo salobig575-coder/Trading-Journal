@@ -59,7 +59,10 @@ const Sync = {
     return 'confirm';
   },
 
-  signOut() { this.setSession(null); this.last = null; },
+  signOut() {
+    this.setSession(null); this.last = null;
+    try { if (this.rt.ws) this.rt.ws.close(); } catch (e) {}
+  },
 
   async token() {
     const s = this.session();
@@ -79,13 +82,62 @@ const Sync = {
 
   start() {
     DB.onChange = () => this.schedule();
-    window.addEventListener('online', () => this.run());
-    document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'visible') this.run(); });
+    window.addEventListener('online', () => { this.run(); this.realtimeStart(); });
+    document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'visible') { this.run(); this.realtimeStart(); } });
+    // Fallback, falls Realtime nicht verbunden ist
+    setInterval(() => { if (document.visibilityState === 'visible' && this.rt.status !== 'ok') this.run({ quiet: true }); }, 60000);
     this.run();
   },
 
+  // ---------- Realtime (Aenderungen anderer Geraete erscheinen sofort) ----------
+  rt: { ws: null, status: 'off', retry: 0, hb: null, timer: null },
+
+  realtimeStart() {
+    if (!this.configured() || !this.loggedIn() || !('WebSocket' in window)) return;
+    const rt = this.rt;
+    if (rt.ws && rt.ws.readyState <= 1) return;
+    const c = this.config();
+    let ws;
+    try { ws = new WebSocket(c.url.replace(/^http/, 'ws') + '/realtime/v1/websocket?apikey=' + encodeURIComponent(c.anonKey) + '&vsn=1.0.0'); } catch (e) { return; }
+    rt.ws = ws; rt.status = 'connecting';
+    let n = 1;
+    const send = (o) => { try { if (ws.readyState === 1) ws.send(JSON.stringify(o)); } catch (e) {} };
+    const topic = 'realtime:journal-' + (this.session().user.id || '').slice(0, 8);
+    ws.onopen = async () => {
+      const token = await this.token().catch(() => null);
+      if (!token) { ws.close(); return; }
+      send({ topic, event: 'phx_join', ref: String(n), join_ref: String(n), payload: { config: { broadcast: { self: false }, presence: { key: '' }, postgres_changes: [{ event: '*', schema: 'public', table: 'journal_data' }] }, access_token: token } });
+      let beats = 0;
+      rt.hb = setInterval(async () => {
+        send({ topic: 'phoenix', event: 'heartbeat', payload: {}, ref: String(++n) });
+        if (++beats % 20 === 0) { const t = await this.token().catch(() => null); if (t) send({ topic, event: 'access_token', payload: { access_token: t }, ref: String(++n) }); }
+      }, 25000);
+    };
+    ws.onmessage = (m) => {
+      let d; try { d = JSON.parse(m.data); } catch (e) { return; }
+      if (d.event === 'phx_reply' && d.topic === topic) {
+        rt.status = d.payload && d.payload.status === 'ok' ? 'ok' : 'error';
+        if (rt.status === 'ok') rt.retry = 0;
+      } else if (d.event === 'postgres_changes') {
+        clearTimeout(rt.timer);
+        rt.timer = setTimeout(() => this.run(), 350);
+      } else if (d.event === 'phx_error' || d.event === 'phx_close') rt.status = 'error';
+    };
+    ws.onclose = () => {
+      clearInterval(rt.hb);
+      if (rt.ws === ws) { rt.ws = null; rt.status = 'off'; }
+      if (this.configured() && this.loggedIn()) {
+        const wait = Math.min(30000, 1500 * Math.pow(2, rt.retry++));
+        setTimeout(() => this.realtimeStart(), wait);
+      }
+    };
+    ws.onerror = () => { try { ws.close(); } catch (e) {} };
+  },
+
   async run(opts = {}) {
-    if (this.running || !this.configured() || !this.loggedIn()) return { skipped: true };
+    if (this.running) { this._again = true; return { skipped: true }; }
+    if (!this.configured() || !this.loggedIn()) return { skipped: true };
+    this.realtimeStart();
     if (!navigator.onLine) { this.error = 'Offline – Abgleich folgt, sobald du wieder online bist.'; return { skipped: true }; }
     this.running = true;
     this.error = '';
@@ -107,6 +159,7 @@ const Sync = {
       if (e.status === 401) this.setSession(null);
     } finally {
       this.running = false;
+      if (this._again) { this._again = false; setTimeout(() => this.run(), 400); }
     }
     return { pulled, pushed, error: this.error };
   },

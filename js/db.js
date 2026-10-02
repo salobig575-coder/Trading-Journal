@@ -4,7 +4,7 @@ const DB_STORES = ['trades', 'analyses', 'collections', 'checklists', 'weeks', '
 // Stores mit "id" als Schluessel (alle anderen nutzen "key")
 const DB_ID_STORES = ['trades', 'analyses', 'collections', 'habits', 'habitLogs'];
 // Einstellungen, die mit der Cloud abgeglichen werden
-const DB_SYNC_SETTINGS = ['options', 'habitSettings'];
+const DB_SYNC_SETTINGS = ['options', 'habitSettings', 'riskRules'];
 
 function openDB() {
   return new Promise((resolve, reject) => {

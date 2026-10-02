@@ -27,6 +27,16 @@ const HomeView = {
     wrap.appendChild(hero);
     App.animateNumber(net, sw.net, { decimals: 1, suffix: 'R', signed: true, duration: 1100 });
 
+    // ---- Wochenrueckblick (ab Freitag 16 Uhr) ----
+    const retro = await WeeklyRetro.pending();
+    if (retro) {
+      wrap.appendChild(App.el('button', { class: 'card row', style: 'width:100%;text-align:left;gap:16px;cursor:pointer;border-color:rgba(var(--accent-rgb),.5)', onclick: () => WeeklyRetro.open(retro) }, [
+        App.el('div', { class: 'ic', style: 'width:44px;height:44px;border-radius:14px;background:var(--accent-soft);color:var(--accent);display:flex;align-items:center;justify-content:center;flex-shrink:0', html: Icons.review() }),
+        App.el('div', { class: 'grow' }, [App.el('div', { style: 'font-weight:600;font-size:16px' }, 'Wochenrückblick'), App.el('div', { class: 'tag' }, 'Zwei Minuten: Was lief gut, was änderst du?')]),
+        App.el('span', { html: Icons.chevronRight(), style: 'width:18px;height:18px;color:var(--dim)' }),
+      ]));
+    }
+
     // ---- Routine heute ----
     const active = Habits.activeOn(today);
     if (active.length) {
@@ -85,6 +95,7 @@ const LibraryPage = {
     ]));
     wrap.appendChild(App.el('div', { class: 'section-title' }, 'Prop Firms'));
     wrap.appendChild(App.el('div', { class: 'list' }, [
+      row('wallet', 'Prop-Konten', 'Ziel, Drawdown & Tageslimit', () => PropAccounts.open()),
       row('shield', 'Prop Firms', 'Firmen & Regeln', () => Collections.page('propfirms')),
     ]));
     return wrap;

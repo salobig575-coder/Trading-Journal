@@ -64,6 +64,15 @@ const StatsHub = {
       { value: s.tape, color: 'var(--text-dim)', label: 'Tape' },
     ], `${Math.round(s.winrate)}%`, 'Winrate')));
     wrap.appendChild(this.card('Equity Curve (kumulierte R)', 'trend', Charts.equity(Calc.curve(trades), { height: 150 })));
+    const mistakes = Calc.group(trades, (t) => t.mistakes || []).filter((r) => r.net < 0).sort((a, b) => a.net - b.net);
+    if (mistakes.length) {
+      const top = mistakes[0];
+      wrap.appendChild(this.card('Teuerster Fehler', 'alert',
+        App.el('div', { class: 'row between' }, [
+          App.el('div', {}, [App.el('div', { style: 'font-weight:600;font-size:16px' }, top.key), App.el('div', { class: 'tag' }, `${top.n}× markiert · kostet dich ${Calc.fmtR(Math.abs(top.net), 1).replace('+', '')}`)]),
+          App.el('div', { class: 'r-val neg' }, Calc.fmtR(top.net, 1)),
+        ])));
+    }
     wrap.appendChild(this.card('Erwartungswert', 'target',
       App.el('div', { class: 'stat-row' }, [
         App.el('div', { class: 'stat' }, [App.el('div', { class: 'num ' + Calc.rClass(s.expectancy) }, Calc.fmtR(s.expectancy)), App.el('div', { class: 'lbl' }, 'pro Trade')]),
@@ -88,6 +97,7 @@ const StatsHub = {
       App.el('button', { class: 'icon-btn', style: end >= today ? 'opacity:.25;pointer-events:none' : '', html: Icons.chevronRight(), onclick: () => shift(1) }),
     ]));
 
+    wrap.appendChild(App.el('button', { class: 'btn secondary', style: 'margin-bottom:16px', onclick: () => WeeklyRetro.open(start) }, [App.icon('review'), 'Wochenrückblick schreiben']));
     const wt = Calc.sort(trades.filter((t) => t.date >= start && t.date <= end));
     const s = Calc.summary(wt);
     wrap.appendChild(App.el('div', { class: 'stat-grid three' }, [
@@ -202,6 +212,8 @@ const StatsHub = {
 
   setups(trades) {
     const wrap = App.el('div');
+    const mrows = Calc.group(trades, (t) => t.mistakes || []);
+    if (mrows.length) wrap.appendChild(this.card('Fehler – was sie kosten', 'alert', Charts.statRows(mrows, { sort: (a, b) => a.net - b.net })));
     wrap.appendChild(this.card('Setup Stats – Entry (Timeframes)', 'target', Charts.statRows(Calc.group(trades, (t) => t.timeframes || []))));
     wrap.appendChild(this.card('Setup Type – Long / Short', 'trend', Charts.statRows(Calc.group(trades, (t) => t.ls))));
     wrap.appendChild(this.card('Models', 'shield', Charts.statRows(Calc.group(trades, (t) => t.model))));

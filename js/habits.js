@@ -37,12 +37,17 @@ const Habits = {
     return this.weekend || (d >= 1 && d <= 5);
   },
 
+  topLevel(date) { return this.activeOn(date).filter((h) => !h.parentId); },
+  childrenOf(pid, date) { return this.activeOn(date).filter((h) => h.parentId === pid); },
+
+  // Unterpunkte zaehlen nicht zum Tagesziel; erledigte bringen zusaetzliche XP (nur wenn die Hauptgewohnheit erledigt ist)
   day(date) {
-    const act = this.activeOn(date);
+    const act = this.topLevel(date);
     const max = act.reduce((s, h) => s + (h.xp || 1), 0);
     const earned = act.reduce((s, h) => s + (this.isDone(date, h.id) ? (h.xp || 1) : 0), 0);
     const doneCount = act.filter((h) => this.isDone(date, h.id)).length;
-    return { date, earned, max, pct: max ? earned / max : 0, complete: max > 0 && earned >= max, count: act.length, doneCount, scored: this.scored(date) };
+    const extra = act.filter((h) => this.isDone(date, h.id)).reduce((s, h) => s + this.childrenOf(h.id, date).reduce((a, k) => a + (this.isDone(date, k.id) ? (k.xp || 1) : 0), 0), 0);
+    return { date, earned, max, extra, pct: max ? earned / max : 0, complete: max > 0 && earned >= max, count: act.length, doneCount, scored: this.scored(date) };
   },
 
   range(dates) {
@@ -143,6 +148,7 @@ const RoutineView = {
     const streakBox = App.el('div', { class: 'streak' }, [App.el('span', { html: Icons.flame() }), streakEl]);
     const bestEl = App.el('div', { class: 'tag' }, '');
     const msgEl = App.el('div', { style: 'font-weight:600;font-size:15px;line-height:1.35' }, '');
+    const extraEl = App.el('div', { class: 'extra-xp', style: 'display:none' }, [App.el('span', { html: Icons.sparkles() }), App.el('span', {})]);
     const dayLabel = date === today ? 'Heute' : date === App.addDays(today, -1) ? 'Gestern' : App.parseDate(date).toLocaleDateString('de-DE', { weekday: 'short', day: 'numeric', month: 'short' });
     const go = (n) => () => { this.date = App.addDays(date, n); this.month = this.date.slice(0, 7); App.refresh(); };
     wrap.appendChild(App.el('div', { class: 'card glow' }, [
@@ -153,7 +159,7 @@ const RoutineView = {
       ]),
       App.el('div', { class: 'today-top' }, [
         ring,
-        App.el('div', { class: 'grow' }, [streakBox, bestEl, App.el('div', { style: 'height:12px' }), msgEl]),
+        App.el('div', { class: 'grow' }, [streakBox, bestEl, App.el('div', { style: 'height:12px' }), msgEl, extraEl]),
       ]),
     ]));
 
@@ -165,23 +171,51 @@ const RoutineView = {
       App.el('button', { class: 'btn small secondary', style: 'padding:7px 14px', onclick: () => { this.editing = !editing; App.refresh(); } }, [App.icon(editing ? 'check' : 'edit', 14), editing ? 'Fertig' : 'Bearbeiten']),
     ]));
     const rows = new Map();
-    Habits.activeOn(date).forEach((h) => {
+    const reorder = async (els) => {
+      for (let i = 0; i < els.length; i++) {
+        const h = els[i]._habit;
+        if (h && h.order !== i + 1) { h.order = i + 1; await DB.put('habits', h); }
+      }
+    };
+    const removeHabit = async (h, el) => {
+      if (!(await App.confirm(`„${h.name}“ löschen?`, { text: 'Bisherige Tage bleiben in deinen Scores erhalten, ab heute zählt sie nicht mehr.' }))) return;
+      el.classList.add('removing');
+      const today = App.todayStr();
+      for (const x of Habits.habits.filter((x) => x.id === h.id || x.parentId === h.id)) { x.archivedDate = today; await DB.put('habits', x); }
+      setTimeout(() => App.refresh(), 260);
+    };
+    // Eine Zeile (Hauptgewohnheit oder Unterpunkt)
+    const buildRow = (h, isChild) => {
       const done = Habits.isDone(date, h.id);
       const cb = App.el('button', { class: 'checkbox' + (done ? ' checked' : ''), html: Icons.check(), 'aria-label': h.name });
-      const trash = App.el('button', { class: 'icon-btn del', 'aria-label': 'Löschen', html: Icons.trash(), onclick: async (e) => {
-        e.stopPropagation();
-        if (!(await App.confirm(`„${h.name}“ löschen?`, { text: 'Bisherige Tage bleiben in deinen Scores erhalten, ab heute zählt sie nicht mehr.' }))) return;
-        row.classList.add('removing');
-        h.archivedDate = App.todayStr();
-        await DB.put('habits', h);
-        setTimeout(() => App.refresh(), 260);
-      } });
-      const row = App.el('div', { class: 'habit' + (done ? ' done' : '') + (editing ? ' editing' : ''), onclick: () => { if (!editing) onToggle(h, row, cb); } }, [
-        cb, App.el('div', { class: 'nm' }, h.name), editing ? trash : App.el('div', { class: 'xp' }, `+${h.xp} XP`),
-      ]);
+      const row = App.el('div', { class: 'habit' + (isChild ? ' child' : '') + (done ? ' done' : '') + (editing ? ' editing' : ''), onclick: () => { if (!editing) onToggle(h, row, cb, isChild); } });
+      row._habit = h;
+      if (editing) row.appendChild(App.el('button', { class: 'grip', 'aria-label': 'Verschieben', html: Icons.grip() }));
+      row.append(cb, App.el('div', { class: 'nm' }, h.name));
+      if (editing) {
+        if (!isChild) row.appendChild(App.el('button', { class: 'icon-btn', 'aria-label': 'Unterpunkt hinzufügen', html: Icons.plus(), onclick: (e) => { e.stopPropagation(); this.addSheet(h.id); } }));
+        row.appendChild(App.el('button', { class: 'icon-btn del', 'aria-label': 'Löschen', html: Icons.trash(), onclick: (e) => { e.stopPropagation(); removeHabit(h, row); } }));
+      } else row.appendChild(App.el('div', { class: 'xp' }, `+${h.xp} XP`));
       rows.set(h.id, row);
-      listCard.appendChild(row);
+      return row;
+    };
+    const groups = App.el('div', { class: 'habit-groups' });
+    Habits.topLevel(date).forEach((h) => {
+      const group = App.el('div', { class: 'habit-group' });
+      group._habit = h;
+      group.appendChild(buildRow(h, false));
+      const kids = Habits.childrenOf(h.id, date);
+      if (kids.length) {
+        const inner = App.el('div', { class: 'inner' }, kids.map((k) => buildRow(k, true)));
+        const box = App.el('div', { class: 'habit-kids' + (editing || Habits.isDone(date, h.id) ? ' open' : '') }, [inner]);
+        group._kids = box;
+        group.appendChild(box);
+        if (editing) UI.sortable(inner, { item: '.habit', handle: '.grip', onDone: reorder });
+      }
+      groups.appendChild(group);
     });
+    if (editing) UI.sortable(groups, { item: '.habit-group', handle: '.grip', onDone: reorder });
+    listCard.appendChild(groups);
     if (!rows.size) listCard.appendChild(App.el('div', { class: 'tag', style: 'padding:18px 4px 8px;text-align:center' }, 'An diesem Tag gab es noch keine Gewohnheiten.'));
     listCard.appendChild(App.el('button', { class: 'habit-add', onclick: () => this.addSheet() }, [App.icon('plus', 16), 'Eigene Gewohnheit hinzufügen']));
     wrap.appendChild(listCard);
@@ -202,6 +236,8 @@ const RoutineView = {
 
     const drawSummary = (animate) => {
       const s = Habits.day(date);
+      extraEl.style.display = s.extra ? 'flex' : 'none';
+      extraEl.lastChild.textContent = `+${s.extra} XP on top`;
       ring.set(s.pct);
       App.animateNumber(pctEl, Math.round(s.pct * 100), { suffix: '%', duration: animate ? 900 : 500, from: Number(pctEl.dataset.v || 0) });
       pctEl.dataset.v = Math.round(s.pct * 100);
@@ -266,7 +302,15 @@ const RoutineView = {
       monthCard.appendChild(grid);
     };
 
-    const onToggle = async (h, row, cb) => {
+    const onToggle = async (h, row, cb, isChild) => {
+      if (isChild) {
+        const d = await Habits.toggle(date, h.id);
+        row.classList.toggle('done', d);
+        cb.classList.toggle('checked', d);
+        if (d) { cb.classList.add('pop'); setTimeout(() => cb.classList.remove('pop'), 650); try { if (navigator.vibrate) navigator.vibrate(10); } catch (e) {} }
+        drawSummary();
+        return;
+      }
       const snap = () => ({ day: Habits.day(date).complete, week: Habits.range(Habits.weekDates(date)).complete, month: Habits.range(Habits.monthDates(date.slice(0, 7))).complete });
       const before = snap();
       const done = await Habits.toggle(date, h.id);
@@ -276,6 +320,9 @@ const RoutineView = {
         cb.classList.add('pop'); setTimeout(() => cb.classList.remove('pop'), 650);
         try { if (navigator.vibrate) navigator.vibrate(14); } catch (e) {}
       }
+      // zugehoerige Unterpunkte erscheinen, sobald die Hauptgewohnheit erledigt ist
+      const grp = row.closest('.habit-group');
+      if (grp && grp._kids) grp._kids.classList.toggle('open', done);
       drawSummary(); drawWeek(); drawMonth();
       if (!done) return;
       const after = snap();
@@ -290,11 +337,13 @@ const RoutineView = {
   },
 
   // Eigene Gewohnheit schnell anlegen (Name, XP, Vorschlaege)
-  addSheet() {
+  addSheet(parentId) {
     const taken = new Set(Habits.habits.filter((h) => !h.archivedDate).map((h) => h.name.toLowerCase()));
     const ideas = ['Wasser trinken (2 L)', '10 Min Meditation', 'Lesen (20 Min)', 'Früh aufstehen', 'Spazieren / Schritte', 'Dehnen / Mobility', 'Kein Handy vor dem Schlafen', 'Trading-Plan visualisieren', 'Pause nach 2 Trades']
       .filter((x) => !taken.has(x.toLowerCase()));
-    let xp = 3;
+    const parents = Habits.habits.filter((h) => !h.archivedDate && !h.parentId);
+    const parentChips = UI.chips(parents.map((h) => h.name), (parents.find((h) => h.id === parentId) || {}).name || '', { onChange: (v) => { xp = v ? 1 : 3; val.textContent = xp; } });
+    let xp = parentId ? 1 : 3;
     const name = App.el('input', { type: 'text', placeholder: 'z. B. 10 Min Meditation', maxlength: '60' });
     const val = App.el('b', {}, String(xp));
     const step = (n) => () => { xp = Math.max(1, Math.min(10, xp + n)); val.textContent = xp; };
@@ -302,7 +351,10 @@ const RoutineView = {
       const t = name.value.trim();
       if (!t) { App.toast('Gib deiner Gewohnheit einen Namen.'); name.focus(); return; }
       const order = Habits.habits.reduce((m, x) => Math.max(m, x.order || 0), 0) + 1;
-      await DB.put('habits', { id: DB.uid(), name: t, xp, order, createdDate: App.todayStr() });
+      const parent = parents.find((h) => h.name === parentChips.get());
+      const rec = { id: DB.uid(), name: t, xp, order, createdDate: App.todayStr() };
+      if (parent) rec.parentId = parent.id;
+      await DB.put('habits', rec);
       App.closeModal();
       App.refresh();
       App.toast('Hinzugefügt');
@@ -314,6 +366,10 @@ const RoutineView = {
       ideas.length ? App.el('div', { class: 'field' }, [
         App.el('label', {}, 'Ideen'),
         App.el('div', { class: 'chip-group' }, ideas.slice(0, 8).map((i) => App.el('button', { class: 'chip sm', onclick: () => { name.value = i; name.focus(); } }, i))),
+      ]) : null,
+      parents.length ? App.el('div', { class: 'field' }, [
+        App.el('label', {}, 'Gehört zu (erscheint, sobald diese erledigt ist)'),
+        parentChips,
       ]) : null,
       App.el('div', { class: 'field' }, [
         App.el('label', {}, 'Gewicht (XP) – wie wichtig ist sie?'),
@@ -334,18 +390,19 @@ const RoutineView = {
     const sheet = App.el('div', {}, [App.el('h3', {}, 'Gewohnheiten'), App.el('p', { class: 'tag', style: 'margin:-8px 0 18px' }, 'XP = Gewicht. Wichtige Gewohnheiten bekommen mehr XP.'), box]);
     const draw = () => {
       box.innerHTML = '';
-      Habits.habits.filter((h) => !h.archivedDate).forEach((h) => {
+      const act = Habits.habits.filter((h) => !h.archivedDate);
+      const ordered = act.filter((h) => !h.parentId).flatMap((h) => [h, ...act.filter((k) => k.parentId === h.id)]);
+      ordered.forEach((h) => {
         const name = App.el('input', { type: 'text', value: h.name, placeholder: 'Name' });
         name.addEventListener('change', async () => { h.name = name.value.trim() || h.name; await DB.put('habits', h); });
         const val = App.el('b', {}, String(h.xp));
         const step = (n) => async () => { h.xp = Math.max(1, Math.min(10, (h.xp || 1) + n)); val.textContent = h.xp; await DB.put('habits', h); };
-        box.appendChild(App.el('div', { class: 'edit-habit' }, [
+        box.appendChild(App.el('div', { class: 'edit-habit' + (h.parentId ? ' child' : '') }, [
           App.el('div', { class: 'grow' }, [name]),
           App.el('div', { class: 'stepper' }, [App.el('button', { onclick: step(-1) }, '−'), val, App.el('button', { onclick: step(1) }, '+')]),
           App.el('button', { class: 'icon-btn del', html: Icons.trash(), onclick: async () => {
             if (!(await App.confirm(`„${h.name}“ entfernen?`, { text: 'Bisherige Tage bleiben erhalten, ab heute zählt die Gewohnheit nicht mehr.', ok: 'Entfernen' }))) return;
-            h.archivedDate = App.todayStr();
-            await DB.put('habits', h);
+            for (const x of Habits.habits.filter((x) => x.id === h.id || x.parentId === h.id)) { x.archivedDate = App.todayStr(); await DB.put('habits', x); }
             draw();
           } }),
         ]));

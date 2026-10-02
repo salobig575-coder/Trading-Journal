@@ -23,6 +23,7 @@ const SettingsView = {
         App.el('div', { class: 'fab-row', style: 'margin-bottom:0' }, [themeBtn('auto', 'Automatisch'), themeBtn('light', 'Hell'), themeBtn('dark', 'Dunkel')]),
       ]),
       this.syncCard(),
+      await this.rulesCard(),
       App.el('div', { class: 'card' }, [
         App.el('h2', {}, [App.icon('journal', 14), 'Auswahllisten']),
         App.el('p', { class: 'tag' }, 'Pairs, Models, PO3, Entry-Setups, DoL, Macros, Ergebnisse … passe alle Listen an dein Modell an.'),
@@ -39,7 +40,8 @@ const SettingsView = {
         App.el('h2', {}, [App.icon('download', 14), 'Backup & Geräte-Wechsel']),
         App.el('p', { class: 'tag' }, 'Alle Daten liegen lokal auf diesem Gerät. Mit dem Backup (.json) kannst du sie sichern oder auf ein anderes Gerät (z. B. PC ↔ Handy) übertragen.'),
         App.el('button', { class: 'btn', style: 'margin-bottom:8px', onclick: () => this.exportFile() }, [App.icon('download'), 'Backup exportieren']),
-        App.el('button', { class: 'btn secondary', onclick: () => fileInput.click() }, [App.icon('upload'), 'Backup importieren']),
+        App.el('button', { class: 'btn secondary', style: 'margin-bottom:8px', onclick: () => fileInput.click() }, [App.icon('upload'), 'Backup importieren']),
+        App.el('button', { class: 'btn secondary', onclick: () => this.exportCsv() }, [App.icon('download'), 'Trades als Tabelle (CSV)']),
         fileInput,
       ]),
       App.el('div', { class: 'card' }, [
@@ -103,6 +105,46 @@ const SettingsView = {
     };
     draw();
     return card;
+  },
+
+  // Eigene Trading-Regeln: loesen Warnungen beim Anlegen eines Trades aus
+  async rulesCard() {
+    const rules = await DB.getSetting('riskRules', { maxTrades: 2, lossStreak: 2, dailyLossR: 2 });
+    const mk = (key, label, step) => {
+      const i = App.el('input', { type: 'number', inputmode: 'decimal', step: step || '1', min: '0', value: rules[key] || 0 });
+      i.addEventListener('change', async () => { rules[key] = Math.max(0, parseFloat(i.value) || 0); await DB.setSetting('riskRules', { ...rules }); });
+      return UI.field(label, i);
+    };
+    return App.el('div', { class: 'card' }, [
+      App.el('h2', {}, [App.icon('shield', 14), 'Trading-Regeln']),
+      App.el('p', { class: 'tag', style: 'margin:0 0 14px' }, 'Du bekommst einen Hinweis, wenn du beim neuen Trade eine Grenze erreicht hast. 0 = aus.'),
+      App.el('div', { class: 'field-grid' }, [mk('maxTrades', 'Max. Trades / Tag'), mk('lossStreak', 'Verluste in Folge')]),
+      mk('dailyLossR', 'Tageslimit (R)', '0.5'),
+    ]);
+  },
+
+  async exportCsv() {
+    const trades = Calc.sort(await DB.getAll('trades'));
+    const accounts = Object.fromEntries((await DB.getAll('collections')).filter((c) => c.kind === 'account').map((a) => [a.id, a.name]));
+    const cols = [
+      ['Datum', (t) => t.date], ['Tag', (t) => t.day], ['Trade', (t) => t.trade], ['Pair', (t) => t.pair], ['Long/Short', (t) => t.ls],
+      ['Model', (t) => t.model], ['PO3', (t) => t.po3], ['Entry', (t) => (t.timeframes || []).join(' | ')], ['DoL', (t) => (t.dol || []).join(' | ')],
+      ['Macro', (t) => (t.macro || []).join(' | ')], ['Ergebnis', (t) => t.result], ['R:R (Betrag)', (t) => t.rr],
+      ['R netto', (t) => Calc.rValue(t)], ['$ netto', (t) => (t.pnl === undefined || t.pnl === '' ? '' : Calc.pnl(t))], ['Konto', (t) => accounts[t.account] || ''],
+      ['Rating', (t) => t.rating], ['Fehler', (t) => (t.mistakes || []).join(' | ')], ['Psych', (t) => t.psych], ['Notes', (t) => t.notes],
+    ];
+    const esc = (v) => {
+      const s = v === undefined || v === null ? '' : String(v).replace(/\r?\n/g, ' ');
+      return /[";]/.test(s) ? `"${s.replace(/"/g, '""')}"` : s;
+    };
+    const lines = [cols.map(([h]) => h).join(';'), ...trades.map((t) => cols.map(([, fn]) => esc(fn(t))).join(';'))];
+    const blob = new Blob(['﻿' + lines.join('\r\n')], { type: 'text/csv;charset=utf-8' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url; a.download = `trading-journal-trades-${App.todayStr()}.csv`;
+    document.body.appendChild(a); a.click(); a.remove();
+    URL.revokeObjectURL(url);
+    App.toast(`${trades.length} Trades exportiert`);
   },
 
   manageOptions() {

@@ -25,6 +25,12 @@ drop trigger if exists journal_touch_synced on public.journal_data;
 create trigger journal_touch_synced before insert or update on public.journal_data
   for each row execute function public.journal_touch_synced();
 
+-- Realtime: Aenderungen anderer Geraete sofort empfangen
+do $$ begin
+  alter publication supabase_realtime add table public.journal_data;
+exception when duplicate_object then null;
+end $$;
+
 -- Jeder Nutzer sieht und aendert ausschliesslich seine eigenen Zeilen
 alter table public.journal_data enable row level security;
 

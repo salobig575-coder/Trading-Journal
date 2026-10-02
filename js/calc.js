@@ -24,6 +24,14 @@ const Calc = {
     return 0;
   },
 
+  // $-Ergebnis: Betrag wird positiv erfasst, das Vorzeichen folgt dem Ergebnis (wie bei R)
+  pnl(t) {
+    const o = this.outcome(t);
+    const v = Math.abs(parseFloat(t.pnl));
+    if (isNaN(v)) return 0;
+    return o === 'win' ? v : o === 'loss' ? -v : 0;
+  },
+
   sort(trades) {
     return trades.slice().sort((a, b) => (a.date || '').localeCompare(b.date || '') || (a.createdAt || 0) - (b.createdAt || 0));
   },

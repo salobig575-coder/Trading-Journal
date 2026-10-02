@@ -14,6 +14,7 @@ const Options = {
     biases: 'Bias-Ergebnis (W/L Archiv)',
     pl: 'P/L (Archiv)',
     analysisPairs: 'Pairs (Pre-Session Analyse)',
+    mistakes: 'Fehler-Tags',
   },
 
   defaults: {
@@ -37,6 +38,7 @@ const Options = {
     biases: ['Win', 'Loss', 'no bias', 'B/E'],
     pl: ['Profit', 'Loss', 'B/E', 'Tape'],
     analysisPairs: ['EURUSD', 'GBPUSD', 'USOIL', 'GOLD', 'DXY', 'NQ', 'ES'],
+    mistakes: ['Zu früh rein', 'Zu spät rein', 'SL verschoben', 'Zu früh raus', 'FOMO / Revenge', 'Zu groß gehandelt', 'Kein klares Setup', 'Regeln ignoriert', 'News ignoriert'],
   },
 
   data: {},

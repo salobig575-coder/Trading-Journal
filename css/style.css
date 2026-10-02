@@ -471,6 +471,45 @@ textarea { resize: vertical; min-height: 96px; line-height: 1.5; }
 .stepper b { min-width: 32px; text-align: center; font-family: var(--display); font-size: 14px; }
 .edit-habit { display: flex; align-items: center; gap: 10px; margin-bottom: 10px; }
 
+/* ---------- Unterpunkte (erscheinen nach der Hauptgewohnheit) ---------- */
+.habit-kids { display: grid; grid-template-rows: 0fr; opacity: 0; transition: grid-template-rows .6s var(--ease), opacity .45s var(--ease); }
+.habit-kids.open { grid-template-rows: 1fr; opacity: 1; }
+.habit-kids > .inner { overflow: hidden; min-height: 0; margin-left: 15px; padding-left: 20px; border-left: 1.5px solid rgba(var(--accent-rgb), .45); }
+.habit.child { padding: 11px 4px; gap: 14px; }
+.habit.child .nm { font-size: 14px; font-weight: 500; }
+.habit.child .checkbox { width: 24px; height: 24px; }
+.habit.child .checkbox svg { width: 13px; height: 13px; }
+.habit-group + .habit-group { border-top: 1px solid var(--line); }
+.habit-group .habit + .habit { border-top: none; }
+.habit-group > .habit:first-child { border-top: none; }
+.extra-xp { align-items: center; gap: 7px; margin-top: 8px; font-size: 13px; font-weight: 600; color: var(--accent); animation: pop .5s var(--spring) both; }
+.extra-xp svg { width: 15px; height: 15px; }
+.edit-habit.child { margin-left: 22px; }
+
+/* ---------- Ziehen zum Sortieren ---------- */
+.grip { display: flex; align-items: center; justify-content: center; width: 28px; height: 32px; margin-left: -6px; border: none; background: none; color: var(--dim); touch-action: none; cursor: grab; flex-shrink: 0; }
+.grip svg { width: 18px; height: 18px; }
+.grip:active { cursor: grabbing; color: var(--accent); }
+.dragging { position: relative; z-index: 3; background: var(--surface-2); border-radius: 14px; box-shadow: 0 18px 40px -12px rgba(0,0,0,.55); transform: scale(1.02); transition: transform .2s var(--spring), box-shadow .2s; }
+.cl-group + .cl-group { margin-top: 0; }
+
+/* ---------- Warnungen & Konten ---------- */
+.card.warn { border-color: rgba(var(--loss-rgb), .45); background: linear-gradient(180deg, rgba(var(--loss-rgb), .08), transparent), var(--surface); animation: pop .5s var(--spring) both; }
+.progress.loss > i { background: linear-gradient(90deg, var(--loss), rgba(var(--loss-rgb), .7)); }
+.card.dim { opacity: .6; }
+.btn-row.wrap { flex-wrap: wrap; }
+.btn-row.wrap .btn { flex: 1 1 130px; }
+
+/* ---------- Lightbox-Steuerung ---------- */
+.lb-count { position: absolute; top: calc(18px + env(safe-area-inset-top)); left: 50%; transform: translateX(-50%); color: #fff; font-size: 13px; font-weight: 600; opacity: .8; }
+.lb-x { position: absolute; top: calc(14px + env(safe-area-inset-top)); right: 14px; background: rgba(255,255,255,.12); border-color: transparent; color: #fff; }
+.lb-prev, .lb-next { position: absolute; top: 50%; margin-top: -21px; background: rgba(255,255,255,.12); border-color: transparent; color: #fff; }
+.lb-prev { left: 12px; }
+.lb-next { right: 12px; }
+.lightbox img { touch-action: pan-y; user-select: none; -webkit-user-drag: none; }
+@keyframes lbNext { from { opacity: 0; transform: translateX(40px); } to { opacity: 1; transform: none; } }
+@keyframes lbPrev { from { opacity: 0; transform: translateX(-40px); } to { opacity: 1; transform: none; } }
+
 /* ---------- Update-Hinweis ---------- */
 .update-bar { position: fixed; z-index: 160; left: 50%; bottom: calc(var(--dock-h) + 22px + env(safe-area-inset-bottom)); width: calc(100% - 32px); max-width: 440px; display: flex; align-items: center; gap: 12px; padding: 12px 12px 12px 16px; border-radius: 22px; background: var(--surface); border: 1px solid rgba(var(--accent-rgb), .55); box-shadow: 0 26px 50px -18px rgba(0,0,0,.6), 0 0 0 5px rgba(var(--accent-rgb), .08); transform: translate(-50%, 130%); opacity: 0; transition: transform .7s var(--ease), opacity .4s; }
 .update-bar.show { transform: translate(-50%, 0); opacity: 1; }

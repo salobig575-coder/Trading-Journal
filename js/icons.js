@@ -8,6 +8,8 @@ const Icons = {
   stats() { return this.wrap('<path d="M4 20h16"/><path d="M7 20v-7"/><path d="M12 20V6"/><path d="M17 20v-10"/>'); },
   settings() { return this.wrap('<circle cx="12" cy="12" r="3"/><path d="M19.4 13.5a7.6 7.6 0 0 0 0-3l1.9-1.4-2-3.4-2.2.7a7.6 7.6 0 0 0-2.6-1.5L14 2.5h-4l-.5 2.4a7.6 7.6 0 0 0-2.6 1.5l-2.2-.7-2 3.4L4.6 10.5a7.6 7.6 0 0 0 0 3L2.7 15l2 3.4 2.2-.7c.75.66 1.63 1.16 2.6 1.5l.5 2.4h4l.5-2.4a7.6 7.6 0 0 0 2.6-1.5l2.2.7 2-3.4Z"/>'); },
   check() { return this.wrap('<path pathLength="1" d="m5 12.5 4.5 4.5L19 7"/>'); },
+  grip() { return this.wrap('<circle cx="9" cy="6.5" r="1.1"/><circle cx="15" cy="6.5" r="1.1"/><circle cx="9" cy="12" r="1.1"/><circle cx="15" cy="12" r="1.1"/><circle cx="9" cy="17.5" r="1.1"/><circle cx="15" cy="17.5" r="1.1"/>'); },
+  wallet() { return this.wrap('<path d="M4 7.5A2.5 2.5 0 0 1 6.5 5H18v3"/><path d="M4 7.5V17a2 2 0 0 0 2 2h12.5a1 1 0 0 0 1-1v-9a1 1 0 0 0-1-1H6.5A2.5 2.5 0 0 1 4 7.5Z"/><circle cx="15.5" cy="13.5" r="1"/>'); },
   routine() { return this.wrap('<circle cx="12" cy="12" r="8.5"/><path d="m8.3 12.3 2.6 2.6 4.9-5.4"/>'); },
   flame() { return this.wrap('<path d="M12 3c.6 3.2 3.8 4.6 3.8 8.3A3.8 3.8 0 0 1 12 15a3.8 3.8 0 0 1-3.8-3.7c0-1.5.6-2.5 1.4-3.4.2 1.1.6 1.7 1.3 2C11 8.5 11 5.5 12 3Z"/><path d="M8.2 14.8A4.7 4.7 0 0 0 12 21a4.7 4.7 0 0 0 3.8-6.2"/>'); },
   checklist() { return this.wrap('<path d="m4 6.5 1.7 1.7L8.6 5"/><path d="m4 12.5 1.7 1.7 2.9-3.2"/><path d="m4 18.5 1.7 1.7 2.9-3.2"/><path d="M12 7h8M12 13h8M12 19h8"/>'); },

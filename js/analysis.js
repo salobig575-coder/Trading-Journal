@@ -212,3 +212,55 @@ const AnalysisView = {
     ]);
   },
 };
+
+// Wochenrueckblick: kurzer Dialog, der als "Weekly Review" im Journal landet
+const WeeklyRetro = {
+  // Faellig ab Freitag 16 Uhr, solange fuer die Woche noch kein Review existiert
+  async pending() {
+    const now = new Date();
+    const dow = (now.getDay() + 6) % 7;
+    if (!(dow >= 5 || (dow === 4 && now.getHours() >= 16))) return null;
+    const ws = App.weekStart(App.todayStr());
+    const have = (await DB.getAll('analyses')).some((a) => a.type === 'Weekly Review' && App.weekKey(a.date) === App.weekKey(ws));
+    return have ? null : ws;
+  },
+
+  async open(ws) {
+    await Habits.load();
+    const end = App.addDays(ws, 6);
+    const trades = (await DB.getAll('trades')).filter((t) => t.date >= ws && t.date <= end);
+    const s = Calc.summary(trades);
+    const r = Habits.range(Habits.weekDates(ws));
+    const week = App.isoWeek(ws).week;
+    const summary = `${trades.length} Trade${trades.length === 1 ? '' : 's'} · Winrate ${Math.round(s.winrate)}% · ${Calc.fmtR(s.net, 1)}` + (r.max ? ` · Routine ${Math.round(r.pct * 100)}%` : '');
+
+    const existing = (await DB.getAll('analyses')).find((a) => a.type === 'Weekly Review' && App.weekKey(a.date) === App.weekKey(ws));
+    const f = (existing && existing.fields) || {};
+    const good = App.el('textarea', { placeholder: 'z. B. Ich habe auf mein Setup gewartet …', style: 'min-height:84px' }, f.done || '');
+    const better = App.el('textarea', { placeholder: 'z. B. Nach dem ersten Verlust nicht mehr nachlegen …', style: 'min-height:84px' }, f.improve || '');
+    const moods = ['😞 Schwer', '😐 Okay', '🙂 Gut', '😀 Stark', '🔥 Top'];
+    const mood = UI.chips(moods, f.emotions || '', {});
+
+    const save = async () => {
+      const rec = existing ? { ...existing } : { id: DB.uid(), type: 'Weekly Review', date: ws, pairs: [], images: {}, createdAt: Date.now() };
+      rec.name = `Weekly Review CW${week}`;
+      rec.fields = { ...(rec.fields || {}), performance: summary, done: good.value, improve: better.value, emotions: mood.get() };
+      await DB.put('analyses', rec);
+      App.closeModal();
+      App.refresh();
+      Fx.celebrate('📝', 'Rückblick gespeichert', 'Du findest ihn unter Journal → Analysen.', 0.6);
+    };
+
+    App.showModal(App.el('div', {}, [
+      App.el('h3', {}, `Wochenrückblick · KW ${week}`),
+      App.el('div', { class: 'callout' }, [App.el('span', { html: Icons.stats() }), App.el('div', { style: 'font-weight:600;font-size:14px' }, summary)]),
+      UI.field('Was lief gut?', good),
+      UI.field('Was machst du nächste Woche anders?', better),
+      UI.field('Wie hast du dich gefühlt?', mood),
+      App.el('div', { class: 'btn-row' }, [
+        App.el('button', { class: 'btn secondary', onclick: () => App.closeModal() }, 'Später'),
+        App.el('button', { class: 'btn', onclick: save }, [App.icon('check'), 'Speichern']),
+      ]),
+    ]));
+  },
+};

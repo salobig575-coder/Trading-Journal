@@ -51,3 +51,13 @@ Zusätzlich gibt es unter **Einstellungen → Backup** einen JSON-Export/-Import
 ## Neue Version ausliefern
 
 Bei jedem Release in `sw.js` die Zahl in `CACHE_NAME` erhöhen (z. B. `trading-journal-v8`). Offene Apps zeigen dann unten „Neue Version verfügbar“ mit Button **Neu laden**.
+
+## Weitere Funktionen
+
+- **Pre-Trade-Check** (Trading Model abhaken) und **Warnungen** bei Trade-Limit, Verlustserie und Tageslimit (Einstellungen → Trading-Regeln)
+- **Fehler-Tags** pro Trade mit Kosten-Auswertung in der Statistik
+- **Prop-Konten** mit Profit-Ziel, Drawdown- und Tageslimit-Puffer (Bibliothek → Prop-Konten)
+- **Wochenrückblick** ab Freitag 16 Uhr, **Risiko-Rechner**, **CSV-Export**
+- Bilder aus der **Zwischenablage** einfügen, Vollbild mit Wischen
+- Routine: Unterpunkte erscheinen nach der Hauptgewohnheit, Reihenfolge per Ziehen
+- **Realtime-Sync**: Änderungen vom anderen Gerät erscheinen sofort (dafür `supabase/schema.sql` einmal erneut ausführen)

@@ -64,26 +64,46 @@ const UI = {
   },
 
   // Bild-Feld mit Vorschau. node.get() liefert Array von Data-URLs.
+  // Bilder lassen sich waehlen, per "Einfügen"-Knopf oder mit Strg/Cmd+V aus der Zwischenablage hinzufuegen.
   imageField(images) {
     let list = (images || []).slice();
     const wrap = App.el('div', { class: 'thumbs' });
     const input = App.el('input', { type: 'file', accept: 'image/*', multiple: true, style: 'display:none' });
-    input.addEventListener('change', async () => {
-      for (const f of input.files) {
-        try { list.push(await UI.compressImage(f)); } catch (e) { App.toast('Dieses Bild konnte nicht geladen werden.'); }
+    const addFiles = async (files) => {
+      let n = 0;
+      for (const f of files) {
+        try { list.push(await UI.compressImage(f)); n++; } catch (e) { App.toast('Dieses Bild konnte nicht geladen werden.'); }
       }
-      input.value = '';
-      draw();
+      if (n) draw();
+    };
+    input.addEventListener('change', async () => { await addFiles([...input.files]); input.value = ''; });
+    wrap.addFiles = addFiles;
+    wrap.addEventListener('pointerdown', () => { UI._activeImg = wrap; });
+    const pasteBtn = App.el('button', {
+      type: 'button', class: 'add-thumb', title: 'Aus Zwischenablage einfügen', html: Icons.copy(),
+      onclick: async () => {
+        UI._activeImg = wrap;
+        try {
+          const items = await navigator.clipboard.read();
+          const files = [];
+          for (const it of items) {
+            const type = it.types.find((t) => t.startsWith('image/'));
+            if (type) files.push(new File([await it.getType(type)], 'paste.png', { type }));
+          }
+          if (files.length) await addFiles(files); else App.toast('Keine Grafik in der Zwischenablage.');
+        } catch (e) { App.toast('Einfügen nicht erlaubt – nutze Strg+V oder die Auswahl.'); }
+      },
     });
     const draw = () => {
       wrap.innerHTML = '';
       list.forEach((src, i) => {
-        wrap.appendChild(App.el('div', { class: 'thumb', onclick: () => UI.lightbox(src) }, [
+        wrap.appendChild(App.el('div', { class: 'thumb', onclick: () => UI.lightbox(list, i) }, [
           App.el('img', { src, alt: '' }),
           App.el('button', { type: 'button', class: 'x', html: Icons.close(), onclick: (e) => { e.stopPropagation(); list.splice(i, 1); draw(); } }),
         ]));
       });
       wrap.appendChild(App.el('button', { type: 'button', class: 'add-thumb', html: Icons.plus(), onclick: () => input.click() }));
+      wrap.appendChild(pasteBtn);
       wrap.appendChild(input);
     };
     draw();
@@ -91,13 +111,72 @@ const UI = {
     return wrap;
   },
 
-  lightbox(src) {
-    const box = App.el('div', { class: 'lightbox', onclick: () => box.remove() }, [App.el('img', { src, alt: '' })]);
+  // Vollbild-Ansicht; bei mehreren Bildern mit Wischen / Pfeiltasten
+  lightbox(src, start = 0) {
+    const list = Array.isArray(src) ? src : [src];
+    let i = Math.max(0, Math.min(list.length - 1, start));
+    const img = App.el('img', { alt: '' });
+    const counter = App.el('div', { class: 'lb-count' });
+    const show = (dir) => {
+      img.style.animation = 'none'; img.offsetWidth; // Animation neu starten
+      img.style.animation = dir ? `${dir > 0 ? 'lbNext' : 'lbPrev'} .35s var(--ease) both` : '';
+      img.src = list[i];
+      counter.textContent = list.length > 1 ? `${i + 1} / ${list.length}` : '';
+    };
+    const go = (d) => { if (list.length < 2) return; i = (i + d + list.length) % list.length; show(d); };
+    const close = () => { document.removeEventListener('keydown', onKey); box.remove(); };
+    const onKey = (e) => { if (e.key === 'Escape') close(); else if (e.key === 'ArrowRight') go(1); else if (e.key === 'ArrowLeft') go(-1); };
+    let x0 = null;
+    const box = App.el('div', { class: 'lightbox' }, [
+      img, counter,
+      App.el('button', { class: 'round-btn lb-x', html: Icons.close(), onclick: (e) => { e.stopPropagation(); close(); } }),
+      list.length > 1 ? App.el('button', { class: 'round-btn lb-prev', html: Icons.chevronLeft(), onclick: (e) => { e.stopPropagation(); go(-1); } }) : null,
+      list.length > 1 ? App.el('button', { class: 'round-btn lb-next', html: Icons.chevronRight(), onclick: (e) => { e.stopPropagation(); go(1); } }) : null,
+    ]);
+    box.addEventListener('pointerdown', (e) => { x0 = e.clientX; });
+    box.addEventListener('pointerup', (e) => {
+      if (x0 === null) return;
+      const dx = e.clientX - x0; x0 = null;
+      if (Math.abs(dx) > 50) go(dx < 0 ? 1 : -1);
+      else if (e.target === box) close();
+    });
+    document.addEventListener('keydown', onKey);
     document.body.appendChild(box);
+    show(0);
   },
 
   imageViewer(images) {
-    return App.el('div', {}, (images || []).map((src) => App.el('img', { class: 'img-big', src, alt: '', onclick: () => UI.lightbox(src) })));
+    return App.el('div', {}, (images || []).map((src, i) => App.el('img', { class: 'img-big', src, alt: '', onclick: () => UI.lightbox(images, i) })));
+  },
+
+  // Sortierbare Liste per Ziehen am Griff. opts: { item, handle, onDone(elements) }
+  sortable(container, opts) {
+    container.addEventListener('pointerdown', (e) => {
+      const h = e.target.closest(opts.handle);
+      if (!h || !container.contains(h)) return;
+      const item = h.closest(opts.item);
+      if (!item || item.parentElement !== container) return;
+      e.preventDefault();
+      try { h.setPointerCapture(e.pointerId); } catch (err) {}
+      item.classList.add('dragging');
+      const move = (ev) => {
+        const y = ev.clientY;
+        const sibs = [...container.children].filter((c) => c !== item && c.matches(opts.item));
+        const next = sibs.find((s) => { const r = s.getBoundingClientRect(); return y < r.top + r.height / 2; });
+        if (next) { if (item.nextElementSibling !== next) container.insertBefore(item, next); }
+        else if (container.lastElementChild !== item) container.appendChild(item);
+      };
+      const up = () => {
+        h.removeEventListener('pointermove', move);
+        h.removeEventListener('pointerup', up);
+        h.removeEventListener('pointercancel', up);
+        item.classList.remove('dragging');
+        opts.onDone([...container.children].filter((c) => c.matches(opts.item)));
+      };
+      h.addEventListener('pointermove', move);
+      h.addEventListener('pointerup', up);
+      h.addEventListener('pointercancel', up);
+    });
   },
 
   // Zaehlt abgehakte Punkte einer Checklisten-Struktur (rekursiv)
@@ -145,7 +224,15 @@ const UI = {
     };
 
     const renderItems = (items, parentList, container) => {
+      if (editMode) {
+        UI.sortable(container, { item: '.cl-group', handle: '.grip', onDone: (els) => {
+          parentList.splice(0, parentList.length, ...els.map((g) => g._item));
+          save();
+        } });
+      }
       items.forEach((it) => {
+        const group = App.el('div', { class: 'cl-group' });
+        group._item = it;
         const row = App.el('div', { class: 'cl-item' + (it.checked ? ' done' : '') });
         const cb = App.el('button', {
           class: 'checkbox' + (it.checked ? ' checked' : ''), html: Icons.check(),
@@ -158,6 +245,7 @@ const UI = {
             save(); updateProgress();
           },
         });
+        if (editMode) row.appendChild(App.el('button', { class: 'grip', 'aria-label': 'Verschieben', html: Icons.grip() }));
         row.appendChild(cb);
         if (editMode) {
           const inp = App.el('input', { type: 'text', value: it.text });
@@ -168,12 +256,13 @@ const UI = {
         } else {
           row.appendChild(App.el('div', { class: 'txt' }, it.text));
         }
-        container.appendChild(row);
+        group.appendChild(row);
         if (it.children && it.children.length) {
           const kids = App.el('div', { class: 'cl-children' });
           renderItems(it.children, it.children, kids);
-          container.appendChild(kids);
+          group.appendChild(kids);
         }
+        container.appendChild(group);
       });
     };
 
@@ -213,3 +302,13 @@ const UI = {
     return wrap;
   },
 };
+
+// Strg/Cmd+V: Bild aus der Zwischenablage in das zuletzt benutzte Bild-Feld einfuegen
+document.addEventListener('paste', (e) => {
+  const field = UI._activeImg;
+  if (!field || !document.body.contains(field) || !e.clipboardData) return;
+  const files = [...e.clipboardData.files].filter((f) => f.type.startsWith('image/'));
+  if (!files.length) return;
+  e.preventDefault();
+  field.addFiles(files);
+});

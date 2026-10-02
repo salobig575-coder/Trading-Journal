@@ -152,6 +152,8 @@ const TradeDetail = {
       prop('Ergebnis', t.result),
       o && o !== 'tape' ? prop('R:R (netto)', Calc.fmtR(r)) : null,
       t.check ? prop('Model-Check', `${t.check.done} / ${t.check.total}`) : null,
+      t.pnl !== undefined && t.pnl !== '' && o && o !== 'tape' ? prop('Ergebnis in $', (Calc.pnl(t) > 0 ? '+' : '') + Calc.pnl(t).toLocaleString('de-DE') + ' $') : null,
+      prop('Fehler', t.mistakes, true),
       prop('Rating', t.rating), prop('Bias (W/L)', t.bias), prop('P/L', t.pl),
       prop('SL (Punkte)', t.slPoints), prop('TP (Punkte)', t.tpPoints),
       prop('Entry', t.timeframes, true), prop('Entry-Typ', t.entryTypes, true), prop('DoL', t.dol, true), prop('Macro', t.macro, true),
@@ -169,8 +171,9 @@ const TradeDetail = {
       cover ? App.el('img', { src: cover, alt: '', style: 'width:100%;aspect-ratio:16/10;object-fit:cover;border-radius:18px;margin-bottom:16px;cursor:zoom-in', onclick: () => UI.lightbox(cover) }) : null,
       App.el('h3', {}, t.trade || t.pair || 'Trade'),
       grid, ...texts, ...imgs,
-      App.el('div', { class: 'btn-row' }, [
+      App.el('div', { class: 'btn-row wrap' }, [
         App.el('button', { class: 'btn secondary', onclick: () => { App.closeModal(); TradeForm.open(t); } }, [App.icon('edit'), 'Bearbeiten']),
+        App.el('button', { class: 'btn secondary', onclick: () => { App.closeModal(); TradeForm.open(null, TradeForm.templateFrom(t)); } }, [App.icon('copy'), 'Duplizieren']),
         App.el('button', { class: 'btn danger', onclick: async () => { if (await App.confirm('Trade löschen?')) { await DB.delete('trades', t.id); App.closeModal(); App.refresh(); } } }, [App.icon('trash'), 'Löschen']),
       ]),
       App.el('button', { class: 'btn secondary', style: 'margin-top:10px', onclick: () => App.closeModal() }, 'Schließen'),
@@ -180,16 +183,38 @@ const TradeDetail = {
 };
 
 const TradeForm = {
-  open(existing) {
-    App.openPage(existing ? 'Trade bearbeiten' : 'Neuer Trade', () => this.render(existing));
+  // existing: Trade bearbeiten · template: Felder eines frueheren Trades als Vorlage uebernehmen
+  open(existing, template) {
+    App.openPage(existing ? 'Trade bearbeiten' : 'Neuer Trade', () => this.render(existing, template));
   },
 
-  async render(existing) {
-    const t = existing ? { ...existing, images: { ...(existing.images || {}) } } : { id: DB.uid(), createdAt: Date.now(), date: App.todayStr(), images: {} };
+  // Vorlage aus einem Trade: nur die Setup-Felder, keine Ergebnisse/Notizen/Bilder
+  templateFrom(t) {
+    const keep = ['pair', 'ls', 'model', 'po3', 'timeframes', 'dol', 'macro', 'entryTypes', 'account'];
+    return Object.fromEntries(keep.filter((k) => t[k] !== undefined).map((k) => [k, Array.isArray(t[k]) ? t[k].slice() : t[k]]));
+  },
+
+  async render(existing, template) {
+    const t = existing ? { ...existing, images: { ...(existing.images || {}) } } : { ...(template || {}), id: DB.uid(), createdAt: Date.now(), date: App.todayStr(), images: {} };
 
     // Pre-Trade-Check (nur bei neuen Trades): Trading Model abhaken + Warnung bei >= 2 Trades heute
     const modelDoc = existing ? null : await DB.get('checklists', 'tradingModel');
-    const todayCount = existing ? 0 : (await DB.getAll('trades')).filter((x) => x.date === App.todayStr()).length;
+    const allTrades = existing ? [] : await DB.getAll('trades');
+    const rules = await DB.getSetting('riskRules', { maxTrades: 2, lossStreak: 2, dailyLossR: 2 });
+    const accounts = (await DB.getAll('collections')).filter((c) => c.kind === 'account' && !c.closed);
+    const warnings = [];
+    if (!existing) {
+      const todayTrades = allTrades.filter((x) => x.date === App.todayStr());
+      if (rules.maxTrades && todayTrades.length >= rules.maxTrades) warnings.push(`Du hattest heute schon ${todayTrades.length} Trades (Limit: ${rules.maxTrades}).`);
+      const closed = Calc.sort(allTrades).filter((x) => ['win', 'loss', 'be'].includes(Calc.outcome(x)));
+      const n = rules.lossStreak;
+      if (n && closed.length >= n && closed.slice(-n).every((x) => Calc.outcome(x) === 'loss')) warnings.push(`Deine letzten ${n} Trades waren Verluste. Kurze Pause einlegen?`);
+      const dayR = todayTrades.reduce((s, x) => s + Calc.rValue(x), 0);
+      if (rules.dailyLossR && dayR <= -rules.dailyLossR) warnings.push(`Heute stehst du bei ${Calc.fmtR(dayR, 1)} – dein Tageslimit ist −${rules.dailyLossR}R.`);
+    }
+    const warnCard = warnings.length ? App.el('div', { class: 'card warn' }, warnings.map((w) => App.el('div', { class: 'row', style: 'align-items:flex-start;gap:12px;padding:3px 0' }, [
+      App.el('span', { html: Icons.alert(), style: 'width:20px;height:20px;color:var(--loss);flex-shrink:0;margin-top:1px' }), App.el('div', { style: 'font-weight:500;font-size:14px' }, w),
+    ]))) : null;
     let checkCard = null;
     if (modelDoc) {
       const cnt = App.el('div', { class: 'tag' });
@@ -215,7 +240,6 @@ const TradeForm = {
           App.el('button', { class: 'btn small secondary', onclick: open }, [App.icon('target', 15), 'Öffnen']),
         ]),
         bar,
-        todayCount >= 2 ? App.el('div', { class: 'callout', style: 'margin:14px 0 0' }, [App.el('span', { html: Icons.alert(), style: 'color:var(--loss)' }), App.el('div', { class: 'tag', style: 'color:var(--text)' }, `Du hattest heute schon ${todayCount} Trades. Laut deinem Model: max. 2 pro Tag.`)]) : null,
       ]);
     }
 
@@ -239,7 +263,10 @@ const TradeForm = {
       entryTypes: UI.chips(Options.get('entryTypes'), t.entryTypes || [], { multi: true }),
       bias: UI.chips(Options.get('biases'), t.bias, {}),
       pl: UI.chips(Options.get('pl'), t.pl, {}),
+      mistakes: UI.chips(Options.get('mistakes'), t.mistakes || [], { multi: true }),
+      account: UI.chips(accounts.map((a) => a.name), (accounts.find((a) => a.id === t.account) || {}).name || '', {}),
     };
+    const pnl = App.el('input', { type: 'number', inputmode: 'decimal', step: '1', min: '0', value: t.pnl !== undefined && t.pnl !== '' ? t.pnl : '', placeholder: '350' });
     const psych = App.el('textarea', { placeholder: 'Wie war dein mentaler Zustand?' }, t.psych || '');
     const notes = App.el('textarea', { placeholder: 'Notizen zum Trade…', style: 'min-height:120px' }, t.notes || '');
     const idea = App.el('textarea', { placeholder: 'Trade-Idee…' }, t.idea || '');
@@ -276,6 +303,8 @@ const TradeForm = {
         macro: f.macro.get(), rating: f.rating.get(), entryTypes: f.entryTypes.get(), bias: f.bias.get(), pl: f.pl.get(),
         slPoints: sl.value === '' ? '' : parseFloat(sl.value), tpPoints: tp.value === '' ? '' : parseFloat(tp.value),
         idea: idea.value, improve: improve.value,
+        mistakes: f.mistakes.get(), pnl: pnl.value === '' ? '' : Math.abs(parseFloat(pnl.value)),
+        account: (accounts.find((a) => a.name === f.account.get()) || {}).id || '',
         images: { ltf: img.ltf.get(), mtf: img.mtf.get(), htf: img.htf.get(), photo: img.photo.get() },
         updatedAt: Date.now(),
       };
@@ -292,15 +321,22 @@ const TradeForm = {
     };
 
     const card = (...kids) => App.el('div', { class: 'card' }, kids);
+    const lastTrade = !existing && !template ? Calc.sort(allTrades).at(-1) : null;
     return App.el('div', {}, [
+      warnCard,
       checkCard,
+      lastTrade ? App.el('button', { class: 'btn secondary', style: 'margin-bottom:16px', onclick: () => { const tpl = TradeForm.templateFrom(lastTrade); App.stack[App.stack.length - 1].render = () => TradeForm.render(null, tpl); App.show({ instant: true }); } }, [App.icon('copy'), 'Setup vom letzten Trade übernehmen']) : null,
       card(
         UI.field('Trade', title),
         App.el('div', { class: 'field-grid' }, [UI.field('Datum', App.el('div', {}, [date, dayLbl])), UI.field('R:R (Betrag)', App.el('div', {}, [rr, App.el('div', { class: 'tag', style: 'margin-top:6px' }, 'Vorzeichen folgt dem Ergebnis')]))]),
         UI.field('Pair', f.pair), UI.field('Long / Short', f.ls),
       ),
       card(UI.field('Model', f.model), UI.field('PO3', f.po3), UI.field('Entry (Setup / Timeframe)', f.timeframes), UI.field('DoL', f.dol)),
-      card(UI.field('Ergebnis', f.result), UI.field('Psych', psych), UI.field('Notes', notes)),
+      card(
+        UI.field('Ergebnis', f.result),
+        App.el('div', { class: 'field-grid' }, [UI.field('Ergebnis in $ (Betrag)', pnl), accounts.length ? UI.field('Konto', f.account) : null]),
+        UI.field('Fehler', f.mistakes), UI.field('Psych', psych), UI.field('Notes', notes),
+      ),
       card(UI.field('Chart LTF', img.ltf), UI.field('Chart MTF', img.mtf), UI.field('Chart HTF', img.htf)),
       moreBtn, more,
       App.el('div', { class: 'btn-row' }, [
