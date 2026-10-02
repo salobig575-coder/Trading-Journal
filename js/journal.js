@@ -19,19 +19,33 @@ const JournalView = {
   outcome: 'all',    // all | win | loss | be | tape
   layout: 'list',    // list | gallery
   q: '',
+  filtersOpen: false,
   monthKey: App.todayStr().slice(0, 7),
 
   async render() {
     const wrap = App.el('div');
     const all = Calc.sort(await DB.getAll('trades')).reverse();
 
-    const chipsFor = (opts, current, set, kinds = {}) => App.el('div', { class: 'chip-scroll' }, opts.map(([k, label]) => App.el('button', {
+    // Suche + Filter-Knopf + Ansicht; die Filter selbst klappen sanft auf (wenige Optionen pro Screen)
+    const chipsFor = (opts, current, set, kinds = {}) => App.el('div', { class: 'chip-group' }, opts.map(([k, label]) => App.el('button', {
       class: `chip ${kinds[k] || ''}` + (current === k ? ' active' : ''), onclick: () => { set(k); App.refresh(); },
     }, label)));
-    wrap.appendChild(App.el('div', { class: 'filters' }, [
-      chipsFor([['all', 'Alle'], ['today', 'Heute'], ['week', 'Woche'], ['month', 'Monat']], this.range, (k) => { this.range = k; }),
-      chipsFor([['all', 'Alle Ergebnisse'], ['win', 'Wins'], ['loss', 'Losses'], ['be', 'B/E'], ['tape', 'Tape']], this.outcome, (k) => { this.outcome = k; }, { win: 'win', loss: 'loss', be: 'be' }),
+    const activeFilters = (this.range !== 'all' ? 1 : 0) + (this.outcome !== 'all' ? 1 : 0);
+    const searchInput = App.el('input', { type: 'text', placeholder: 'Trades durchsuchen…', value: this.q });
+    const filterBtn = App.el('button', {
+      class: 'round-btn', style: 'position:relative' + (this.filtersOpen || activeFilters ? ';color:var(--accent)' : ''), 'aria-label': 'Filter',
+      html: Icons.filter(), onclick: () => { this.filtersOpen = !this.filtersOpen; panel.classList.toggle('open', this.filtersOpen); filterBtn.style.color = this.filtersOpen || activeFilters ? 'var(--accent)' : ''; },
+    }, activeFilters ? [App.el('span', { class: 'badge' }, String(activeFilters))] : []);
+    const layoutBtn = App.el('button', { class: 'round-btn', 'aria-label': 'Ansicht wechseln', html: Icons[this.layout === 'list' ? 'grid' : 'list'](), onclick: () => { this.layout = this.layout === 'list' ? 'gallery' : 'list'; App.refresh(); } });
+    wrap.appendChild(App.el('div', { class: 'row', style: 'margin-bottom:8px;gap:8px' }, [
+      App.el('div', { class: 'search-wrap' }, [App.el('span', { html: Icons.search() }), searchInput]), filterBtn, layoutBtn,
     ]));
+    const panel = App.el('div', { class: 'filter-panel' + (this.filtersOpen ? ' open' : '') }, [App.el('div', { class: 'inner' }, [
+      App.el('div', {}, [App.el('div', { class: 'lbl-up' }, 'Zeitraum'), chipsFor([['all', 'Alle'], ['today', 'Heute'], ['week', 'Woche'], ['month', 'Monat']], this.range, (k) => { this.range = k; })]),
+      App.el('div', {}, [App.el('div', { class: 'lbl-up' }, 'Ergebnis'), chipsFor([['all', 'Alle'], ['win', 'Wins'], ['loss', 'Losses'], ['be', 'B/E'], ['tape', 'Tape']], this.outcome, (k) => { this.outcome = k; }, { win: 'win', loss: 'loss', be: 'be' })]),
+    ])]);
+    wrap.appendChild(panel);
+    wrap.appendChild(App.el('div', { style: 'height:8px' }));
 
     if (this.range === 'month') {
       const [y, m] = this.monthKey.split('-').map(Number);
@@ -52,16 +66,6 @@ const JournalView = {
       if (this.range === 'month') return (t.date || '').startsWith(this.monthKey);
       return true;
     });
-
-    const searchInput = App.el('input', { type: 'text', placeholder: 'Trades durchsuchen…', value: this.q });
-    const layoutBtn = (key, icon) => App.el('button', {
-      class: 'round-btn', style: this.layout === key ? 'color:var(--accent);border-color:rgba(var(--accent-rgb),.6)' : '',
-      html: Icons[icon](), onclick: () => { this.layout = key; App.refresh(); },
-    });
-    wrap.appendChild(App.el('div', { class: 'row', style: 'margin-bottom:16px' }, [
-      App.el('div', { class: 'search-wrap' }, [App.el('span', { html: Icons.search() }), searchInput]),
-      layoutBtn('list', 'list'), layoutBtn('gallery', 'grid'),
-    ]));
 
     const listNode = App.el('div');
     const summaryNode = App.el('div');
@@ -222,7 +226,7 @@ const TradeForm = {
       const upd = () => {
         const c = UI.countChecks(modelDoc);
         cnt.textContent = c.total ? `${c.done} von ${c.total} Punkten erfüllt` : 'Noch keine Punkte im Trading Model';
-        requestAnimationFrame(() => { bar.firstChild.style.width = (c.total ? (c.done / c.total) * 100 : 0) + '%'; });
+        App.fill(bar.firstChild, c.total ? c.done / c.total : 0);
       };
       upd();
       const open = () => {

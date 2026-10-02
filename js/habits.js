@@ -166,8 +166,9 @@ const RoutineView = {
     // ----- Checkliste -----
     const listCard = App.el('div', { class: 'card', style: 'padding:6px 18px 8px' });
     const editing = !!this.editing;
-    listCard.appendChild(App.el('div', { class: 'row between', style: 'padding:12px 4px 4px' }, [
-      App.el('div', { class: 'tag' }, editing ? 'Tippe auf den Papierkorb zum Löschen' : 'Heute zu tun'),
+    const countEl = App.el('div', { class: 'progress-count' }, editing ? 'Tippe auf den Papierkorb zum Löschen' : '');
+    listCard.appendChild(App.el('div', { class: 'row between', style: 'padding:8px 4px 0' }, [
+      countEl,
       App.el('button', { class: 'btn small secondary', style: 'padding:7px 14px', onclick: () => { this.editing = !editing; App.refresh(); } }, [App.icon(editing ? 'check' : 'edit', 14), editing ? 'Fertig' : 'Bearbeiten']),
     ]));
     const rows = new Map();
@@ -236,6 +237,7 @@ const RoutineView = {
 
     const drawSummary = (animate) => {
       const s = Habits.day(date);
+      if (!editing) countEl.textContent = s.count ? `${s.doneCount} von ${s.count} erledigt` : '';
       extraEl.style.display = s.extra ? 'flex' : 'none';
       extraEl.lastChild.textContent = `+${s.extra} XP on top`;
       ring.set(s.pct);
@@ -266,7 +268,7 @@ const RoutineView = {
         const future = d > today;
         strip.appendChild(App.el('div', { class: 'wk-day' + (off ? ' off' : '') + (d === today ? ' today' : '') + (s.complete ? ' full' : '') }, [
           App.el('div', {}, ['M', 'D', 'M', 'D', 'F', 'S', 'S'][(App.parseDate(d).getDay() + 6) % 7]),
-          App.el('div', { class: 'wk-ring', html: `<svg viewBox="0 0 38 38"><circle cx="19" cy="19" r="${radius}" fill="none" stroke="var(--surface-2)" stroke-width="3.5"/><circle cx="19" cy="19" r="${radius}" fill="none" stroke="var(--accent)" stroke-width="3.5" stroke-linecap="round" stroke-dasharray="${c}" stroke-dashoffset="${c * (1 - (future ? 0 : s.pct))}" style="transition:stroke-dashoffset .9s var(--ease)"/></svg><div class="in">${s.complete ? '✓' : App.parseDate(d).getDate()}</div>` }),
+          App.el('div', { class: 'wk-ring', html: `<svg viewBox="0 0 38 38"><circle cx="19" cy="19" r="${radius}" fill="none" stroke="var(--surface-2)" stroke-width="3.5"/><circle cx="19" cy="19" r="${radius}" fill="none" stroke="var(--accent)" stroke-width="3.5" stroke-linecap="round" stroke-dasharray="${c}" stroke-dashoffset="${c * (1 - (future ? 0 : s.pct))}" style="transition:stroke-dashoffset var(--t-slow) var(--ease)"/></svg><div class="in">${s.complete ? '✓' : App.parseDate(d).getDate()}</div>` }),
         ]));
       });
       weekCard.appendChild(strip);

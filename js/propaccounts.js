@@ -39,7 +39,7 @@ const PropAccounts = {
     const signed = (v) => (v > 0 ? '+' : v < 0 ? '−' : '') + Math.abs(Math.round(v)).toLocaleString('de-DE') + ' $';
     const line = (label, text, pct, cls = '') => {
       const bar = App.el('div', { class: 'progress ' + cls, style: 'margin:8px 0 18px' }, [App.el('i')]);
-      requestAnimationFrame(() => requestAnimationFrame(() => { bar.firstChild.style.width = Math.max(0, Math.min(1, pct)) * 100 + '%'; }));
+      App.fill(bar.firstChild, pct);
       return App.el('div', {}, [App.el('div', { class: 'row between' }, [App.el('div', { class: 'tag' }, label), App.el('div', { style: 'font-weight:600;font-size:13.5px' }, text)]), bar]);
     };
     const target = Number(a.target) || 0, maxDD = Number(a.maxDD) || 0, daily = Number(a.dailyLoss) || 0;

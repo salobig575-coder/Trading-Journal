@@ -61,3 +61,7 @@ Bei jedem Release in `sw.js` die Zahl in `CACHE_NAME` erhöhen (z. B. `trading-j
 - Bilder aus der **Zwischenablage** einfügen, Vollbild mit Wischen
 - Routine: Unterpunkte erscheinen nach der Hauptgewohnheit, Reihenfolge per Ziehen
 - **Realtime-Sync**: Änderungen vom anderen Gerät erscheinen sofort (dafür `supabase/schema.sql` einmal erneut ausführen)
+
+## Design-System
+
+Alle Bewegungswerte (`--ease`, `--spring`, `--t-fast/base/slow` = 200/320/440 ms, `--press`, `--stagger`), Abstände (8-pt-Raster), Radien und Schriftgrößen stehen als Tokens oben in `css/style.css`. Animiert wird nur `transform`/`opacity`; `prefers-reduced-motion` wird respektiert. Schrift: SF Pro (Apple) bzw. Inter. Logo: `icons/logo-dark.svg`, `icons/logo-light.svg` (Entwürfe in `design/`).

@@ -220,7 +220,7 @@ const UI = {
     const updateProgress = () => {
       const t = doc.sections.reduce((acc, s) => { const c = countAll(s.items); return { done: acc.done + c.done, total: acc.total + c.total }; }, { done: 0, total: 0 });
       cnt.textContent = `${t.done} / ${t.total}`;
-      requestAnimationFrame(() => { bar.firstChild.style.width = (t.total ? (t.done / t.total) * 100 : 0) + '%'; });
+      App.fill(bar.firstChild, t.total ? t.done / t.total : 0);
     };
 
     const renderItems = (items, parentList, container) => {

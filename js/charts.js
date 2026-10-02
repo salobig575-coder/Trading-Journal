@@ -8,8 +8,11 @@ const Charts = {
       <circle class="ring-fg" cx="${size / 2}" cy="${size / 2}" r="${r}" stroke-width="${stroke}" stroke-dasharray="${c}" stroke-dashoffset="${c}"/>
     </svg>`;
     const fg = wrap.querySelector('.ring-fg');
-    wrap.set = (p) => { fg.style.strokeDashoffset = c * (1 - Math.max(0, Math.min(1, p))); };
-    requestAnimationFrame(() => requestAnimationFrame(() => wrap.set(pct)));
+    let target = pct, ready = false;
+    const apply = () => { fg.style.strokeDashoffset = c * (1 - Math.max(0, Math.min(1, target))); };
+    // Wert merken, bis das Element im DOM ist – so startet die Animation immer vom leeren Ring
+    wrap.set = (p) => { target = p; if (ready) apply(); };
+    requestAnimationFrame(() => requestAnimationFrame(() => { ready = true; apply(); }));
     return wrap;
   },
 
@@ -40,8 +43,8 @@ const Charts = {
       const len = line.getTotalLength();
       line.style.strokeDasharray = len; line.style.strokeDashoffset = len;
       line.getBoundingClientRect();
-      line.style.transition = 'stroke-dashoffset 1.4s cubic-bezier(.22,1,.36,1) .2s';
-      area.style.transition = 'opacity 1s ease .8s';
+      line.style.transition = 'stroke-dashoffset var(--t-slow) var(--ease) 80ms';
+      area.style.transition = 'opacity var(--t-slow) var(--ease) 200ms';
       requestAnimationFrame(() => { line.style.strokeDashoffset = 0; area.style.opacity = 1; });
     });
     return wrap;
@@ -107,11 +110,11 @@ const Charts = {
       path.style.strokeDasharray = len;
       path.style.strokeDashoffset = len;
       path.getBoundingClientRect();
-      path.style.transition = 'stroke-dashoffset 1.1s var(--ease)';
+      path.style.transition = 'stroke-dashoffset var(--t-slow) var(--ease)';
       path.style.strokeDashoffset = '0';
       const area = wrap.querySelector('.chart-area');
       area.style.opacity = 0;
-      area.style.transition = 'opacity 1s var(--ease) .2s';
+      area.style.transition = 'opacity var(--t-slow) var(--ease) 120ms';
       requestAnimationFrame(() => { area.style.opacity = 1; });
     });
     return wrap;
@@ -135,7 +138,7 @@ const Charts = {
       const y = Math.min(yOf(p.value), zeroY);
       const h = Math.max(1.5, Math.abs(yOf(p.value) - zeroY));
       const color = p.value >= 0 ? 'var(--win)' : 'var(--loss)';
-      return `<rect class="bar" data-i="${i}" x="${x.toFixed(1)}" y="${y.toFixed(1)}" width="${bw.toFixed(1)}" height="${h.toFixed(1)}" rx="3" fill="${color}" style="transform-origin:0 ${zeroY}px;transform:scaleY(0);transition:transform .6s var(--ease) ${i * 25}ms"/>`;
+      return `<rect class="bar" data-i="${i}" x="${x.toFixed(1)}" y="${y.toFixed(1)}" width="${bw.toFixed(1)}" height="${h.toFixed(1)}" rx="3" fill="${color}" style="transform-origin:0 ${zeroY}px;transform:scaleY(0);transition:transform var(--t-slow) var(--ease) ${Math.min(i, 12) * 20}ms"/>`;
     }).join('');
     wrap.innerHTML = `<svg viewBox="0 0 ${width} ${height}" style="width:100%;height:${height}px"><line x1="${padX}" x2="${width - padX}" y1="${zeroY}" y2="${zeroY}" stroke="var(--border)"/>${rects}</svg>`;
     const readout = App.el('div', { class: 'chart-readout' }, [App.el('span', {}, 'Tippe einen Balken an'), App.el('span', {})]);
@@ -190,7 +193,7 @@ const Charts = {
         App.el('div', { class: 'vals ' + Calc.rClass(r.net) }, Calc.fmtR(r.net)),
         decided ? bar : null,
       ]));
-      requestAnimationFrame(() => requestAnimationFrame(() => { bar.firstChild.style.width = r.winrate + '%'; }));
+      App.fill(bar.firstChild, r.winrate / 100);
     });
     return wrap;
   },

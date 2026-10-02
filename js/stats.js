@@ -124,7 +124,7 @@ const StatsHub = {
       const bar = App.el('div', { class: 'progress' }, [App.el('i')]);
       wrap.appendChild(this.card('Routine in dieser Woche', 'routine',
         App.el('div', { class: 'score-line' }, [App.el('div', { class: 'pct' }, `${Math.round(r.pct * 100)}%`), App.el('div', { class: 'tag' }, `${r.earned} / ${r.max} XP`)]), bar));
-      requestAnimationFrame(() => requestAnimationFrame(() => { bar.firstChild.style.width = r.pct * 100 + '%'; }));
+      App.fill(bar.firstChild, r.pct);
     }
 
     // Zusammenhang Routine <-> Ergebnis (alle Tage)

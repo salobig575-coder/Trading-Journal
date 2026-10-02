@@ -26,7 +26,10 @@ const App = {
     fab.addEventListener('click', () => this.quickAdd());
     document.getElementById('settingsBtn').addEventListener('click', () => SettingsView.open());
     document.getElementById('backBtn').addEventListener('click', () => this.back());
-    window.addEventListener('popstate', () => { if (this.stack.length) { this.stack.pop(); this.show({ instant: true }); } });
+    document.getElementById('navBack').innerHTML = Icons.chevronLeft();
+    document.getElementById('navBack').addEventListener('click', () => this.back());
+    this.setupNavbar();
+    window.addEventListener('popstate', () => { if (this.stack.length) { this.stack.pop(); this.show({ instant: true, dir: 'pop' }); } });
     window.addEventListener('error', (e) => { console.warn(e.message); });
     window.addEventListener('unhandledrejection', (e) => { console.warn(e.reason); });
 
@@ -39,8 +42,21 @@ const App = {
     const splash = document.getElementById('splash');
     setTimeout(() => {
       splash.classList.add('hide');
-      setTimeout(() => splash.remove(), 700);
-    }, 1500);
+      setTimeout(() => splash.remove(), 480);
+    }, 1200);
+  },
+
+  // ---------- Bewegung: zentrale Tokens ----------
+  reducedMotion() { return !!(window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches); },
+  tok(name, fallback) {
+    const v = getComputedStyle(document.documentElement).getPropertyValue(name).trim();
+    return v.endsWith('ms') ? parseFloat(v) : (parseFloat(v) || fallback);
+  },
+  // Fuellstand per transform (kein Layout): 0..1
+  fill(el, p) {
+    if (!el) return;
+    const v = Math.max(0, Math.min(1, p || 0));
+    requestAnimationFrame(() => requestAnimationFrame(() => { el.style.transform = `scaleX(${v})`; }));
   },
 
   // ---------- Updates ----------
@@ -77,7 +93,7 @@ const App = {
         const w = reg.waiting;
         if (w) w.postMessage({ type: 'SKIP_WAITING' }); else location.reload();
       } }, 'Neu laden'),
-      this.el('button', { class: 'icon-btn', 'aria-label': 'Später', html: Icons.close(), onclick: () => { bar.classList.remove('show'); setTimeout(() => bar.remove(), 500); } }),
+      this.el('button', { class: 'icon-btn', 'aria-label': 'Später', html: Icons.close(), onclick: () => { bar.classList.remove('show'); setTimeout(() => bar.remove(), 440); } }),
     ]);
     document.body.appendChild(bar);
     setTimeout(() => bar.classList.add('show'), 80);
@@ -90,13 +106,13 @@ const App = {
     this.stack = [];
     if (route === 'routine' && typeof RoutineView !== 'undefined') { RoutineView.date = null; RoutineView.editing = false; }
     history.replaceState(null, '', '#' + route);
-    this.show(opts);
+    this.show({ dir: 'tab', ...opts });
   },
 
   openPage(title, renderFn) {
     this.stack.push({ title, render: renderFn });
     history.pushState({ page: true }, '', location.href);
-    this.show();
+    this.show({ dir: 'push' });
   },
 
   back() {
@@ -111,37 +127,83 @@ const App = {
   show(opts = {}) {
     const top = this.stack.at(-1);
     const route = this.routes[this.current];
-    document.body.classList.toggle('in-page', !!top);
+    const inPage = !!top;
+    document.body.classList.toggle('in-page', inPage);
+    document.body.classList.toggle('on-home', this.current === 'home');
 
-    document.querySelectorAll('.dock button.tab').forEach((btn) => btn.classList.toggle('active', btn.dataset.route === this.current && !top));
-    document.getElementById('pageTitle').textContent = top ? top.title : route.title;
+    document.querySelectorAll('.dock button.tab').forEach((btn) => btn.classList.toggle('active', btn.dataset.route === this.current && !inPage));
+    const title = top ? top.title : route.title;
+    document.getElementById('pageTitle').textContent = title;
     document.getElementById('pageSub').textContent = top ? '' : route.over();
+    document.getElementById('navTitle').textContent = title;
+    document.getElementById('navBack').classList.toggle('hidden', !inPage);
 
     const renderFn = top ? top.render : route.render;
     const view = document.getElementById('view');
     const token = (this._token = (this._token || 0) + 1);
-    const render = async () => {
-      let node = null;
-      try { node = await renderFn(); } catch (e) { console.warn(e); node = this.empty('alert', 'Das konnte gerade nicht geladen werden.'); }
-      if (token !== this._token) return;
+    const dir = opts.dir || 'tab';
+    const swapIn = !opts.instant && view.hasChildNodes() && dir !== 'fade';
+    const t0 = performance.now();
+    let ready = false;
+
+    // Skeleton nur, wenn das Laden spuerbar dauert (verhindert Flackern)
+    const sk = setTimeout(() => {
+      if (ready || token !== this._token) return;
+      view.className = '';
       view.innerHTML = '';
-      view.classList.remove('leaving');
+      view.appendChild(this.skeleton());
+    }, 140);
+
+    if (swapIn) view.classList.add('leaving');
+
+    const finish = (node) => {
+      if (token !== this._token) return;
+      ready = true;
+      clearTimeout(sk);
+      const y = window.scrollY;
+      view.className = '';
+      view.innerHTML = '';
       if (node) view.appendChild(node);
-      this.stagger(view);
-      if (!opts.keepScroll) window.scrollTo(0, 0);
+      void view.offsetWidth;
+      view.classList.add('enter-' + dir);
+      if (dir !== 'fade') this.stagger(view);
+      if (opts.keepScroll) window.scrollTo(0, y); else window.scrollTo(0, 0);
     };
-    if (opts.instant || !view.hasChildNodes()) render();
-    else { view.classList.add('leaving'); setTimeout(render, 110); }
+    Promise.resolve().then(() => renderFn()).catch((e) => { console.warn(e); return this.empty('alert', 'Das konnte gerade nicht geladen werden.'); }).then((node) => {
+      const wait = swapIn ? Math.max(0, 140 - (performance.now() - t0)) : 0;
+      setTimeout(() => finish(node), wait);
+    });
   },
 
+  // Inhalt innerhalb derselben Seite aktualisieren: kein Springen, keine erneute Einblend-Choreografie
   refresh() {
-    const y = window.scrollY;
-    this.show({ instant: true, keepScroll: true });
-    requestAnimationFrame(() => window.scrollTo(0, y));
+    this.show({ instant: true, keepScroll: true, dir: 'fade' });
   },
 
-  // Gestaffelter Einstieg der ersten Elemente
+  skeleton() {
+    const box = (h, r) => this.el('div', { class: 'sk', style: `height:${h}px${r ? `;border-radius:${r}px` : ''}` });
+    return this.el('div', { class: 'sk-stack' }, [
+      box(176, 28), box(88, 20), this.el('div', { class: 'row', style: 'gap:16px' }, [box(112, 20), box(112, 20)]),
+      this.el('div', { class: 'sk sk-line', style: 'width:42%' }), this.el('div', { class: 'sk sk-line', style: 'width:68%' }),
+    ]);
+  },
+
+  // Kompakte Glas-Leiste, sobald der grosse Titel aus dem Bild scrollt
+  setupNavbar() {
+    const bar = document.getElementById('navbar');
+    const h1 = document.getElementById('pageTitle');
+    if (!('IntersectionObserver' in window)) return;
+    const obs = new IntersectionObserver(([e]) => { bar.classList.toggle('show', !e.isIntersecting && window.scrollY > 8); }, { rootMargin: '-56px 0px 0px 0px', threshold: 0 });
+    obs.observe(h1);
+  },
+
+  setSub(text) {
+    document.getElementById('pageSub').textContent = text;
+  },
+
+  // Gestaffelter Einstieg der ersten Elemente (max. 8, je 48 ms Versatz)
   stagger(view) {
+    if (this.reducedMotion()) return;
     const items = [];
     const collect = (el) => {
       for (const c of el.children) {
@@ -150,7 +212,7 @@ const App = {
       }
     };
     collect(view);
-    items.slice(0, 10).forEach((el, i) => { el.style.setProperty('--i', i); el.classList.add('rv'); });
+    items.slice(0, 8).forEach((el, i) => { el.style.setProperty('--i', i); el.classList.add('rv'); });
   },
 
   goTab(route, hub, tab) {
@@ -162,15 +224,15 @@ const App = {
   quickAdd() {
     const fab = document.getElementById('fab');
     fab.classList.add('open');
-    const act = (icon, t, s, fn) => App.el('button', { class: 'action-row', onclick: () => { App.closeModal(); setTimeout(fn, 250); } }, [
+    const act = (icon, t, s, fn) => App.el('button', { class: 'action-row', onclick: () => { App.closeModal(); setTimeout(fn, 280); } }, [
       App.el('div', { class: 'ic', html: Icons[icon]() }),
       App.el('div', {}, [App.el('div', { class: 't' }, t), App.el('div', { class: 's' }, s)]),
     ]);
     const bd = this.showModal(App.el('div', {}, [
       App.el('h3', {}, 'Neu erfassen'),
       act('trend', 'Trade', 'Einen Trade ins Journal eintragen', () => TradeForm.open()),
-      act('analyse', 'Analyse', 'Weekly Outlook, Review oder Daily Log', () => { JournalHub.activeTab = 'analysis'; this.navigate('journal'); setTimeout(() => AnalysisView.chooseTemplate(), 350); }),
-      act('review', 'Review', 'Eine Review-Notiz anlegen', () => { JournalHub.activeTab = 'review'; this.navigate('journal'); setTimeout(() => Collections.edit('review'), 350); }),
+      act('analyse', 'Analyse', 'Weekly Outlook, Review oder Daily Log', () => { JournalHub.activeTab = 'analysis'; this.navigate('journal'); setTimeout(() => AnalysisView.chooseTemplate(), 380); }),
+      act('review', 'Review', 'Eine Review-Notiz anlegen', () => { JournalHub.activeTab = 'review'; this.navigate('journal'); setTimeout(() => Collections.edit('review'), 380); }),
     ]));
     const obs = new MutationObserver(() => { if (!document.body.contains(bd)) { fab.classList.remove('open'); obs.disconnect(); } });
     obs.observe(document.body, { childList: true });
@@ -204,7 +266,7 @@ const App = {
     ));
     requestAnimationFrame(() => {
       const active = bar.querySelector('.seg-tab.active');
-      if (active) bar.scrollTo({ left: active.offsetLeft - 22, behavior: 'auto' });
+      if (active) bar.scrollTo({ left: active.offsetLeft - 24, behavior: 'auto' });
     });
     return bar;
   },
@@ -221,10 +283,39 @@ const App = {
     return this.el('div', { class: 'switch-row' }, [this.el('div', { class: 'grow' }, textCol), sw]);
   },
 
+  // Sheet mit Griff: per Ziehen nach unten schliessbar (wie iOS)
+  makeSheet(contentNode, z, dismiss) {
+    const backdrop = this.el('div', { class: 'modal-backdrop', style: z ? `z-index:${z}` : '', onclick: (e) => { if (e.target === backdrop) dismiss(); } });
+    const modal = this.el('div', { class: 'modal' });
+    const grab = this.el('div', { class: 'grab', 'aria-hidden': 'true' });
+    modal.append(grab, contentNode);
+    backdrop.appendChild(modal);
+    let y0 = null, dy = 0, t0 = 0;
+    grab.addEventListener('pointerdown', (e) => { y0 = e.clientY; dy = 0; t0 = performance.now(); modal.style.animation = 'none'; modal.style.transition = 'none'; try { grab.setPointerCapture(e.pointerId); } catch (err) {} });
+    grab.addEventListener('pointermove', (e) => {
+      if (y0 === null) return;
+      dy = Math.max(0, e.clientY - y0);
+      modal.style.transform = `translateY(${dy}px)`;
+      backdrop.style.opacity = String(1 - Math.min(0.7, dy / 420));
+    });
+    const end = () => {
+      if (y0 === null) return;
+      const fast = dy / Math.max(1, performance.now() - t0) > 0.6;
+      y0 = null;
+      if (dy > 110 || (fast && dy > 30)) { dismiss(); return; }
+      modal.style.transition = 'transform var(--t-base) var(--ease)';
+      modal.style.transform = '';
+      backdrop.style.transition = 'opacity var(--t-base) var(--ease)';
+      backdrop.style.opacity = '';
+    };
+    grab.addEventListener('pointerup', end);
+    grab.addEventListener('pointercancel', end);
+    return backdrop;
+  },
+
   showModal(contentNode) {
     this.closeModal(true);
-    const backdrop = this.el('div', { class: 'modal-backdrop', onclick: (e) => { if (e.target === backdrop) App.closeModal(); } });
-    backdrop.appendChild(this.el('div', { class: 'modal' }, [contentNode]));
+    const backdrop = this.makeSheet(contentNode, 0, () => this.closeModal());
     document.body.appendChild(backdrop);
     this._modal = backdrop;
     return backdrop;
@@ -235,35 +326,43 @@ const App = {
     const m = this._modal;
     this._modal = null;
     if (immediate) { m.remove(); return; }
+    m.style.opacity = '';
     m.classList.add('closing');
-    setTimeout(() => m.remove(), 240);
+    setTimeout(() => m.remove(), 340);
   },
 
   // Bestaetigung als Sheet (statt Browser-Dialog)
   confirm(message, opts = {}) {
     return new Promise((resolve) => {
-      const done = (v) => { bd.classList.add('closing'); setTimeout(() => bd.remove(), 240); resolve(v); };
-      const bd = this.el('div', { class: 'modal-backdrop', style: 'z-index:95', onclick: (e) => { if (e.target === bd) done(false); } }, [
-        this.el('div', { class: 'modal' }, [
-          this.el('h3', {}, message),
-          opts.text ? this.el('p', { class: 'tag', style: 'margin:-8px 0 18px' }, opts.text) : null,
-          this.el('div', { class: 'btn-row', style: 'margin-top:0' }, [
-            this.el('button', { class: 'btn secondary', onclick: () => done(false) }, 'Abbrechen'),
-            this.el('button', { class: 'btn ' + (opts.danger === false ? '' : 'danger'), onclick: () => done(true) }, opts.ok || 'Löschen'),
-          ]),
+      let bd;
+      const done = (v) => { bd.style.opacity = ''; bd.classList.add('closing'); setTimeout(() => bd.remove(), 340); resolve(v); };
+      const body = this.el('div', {}, [
+        this.el('h3', {}, message),
+        opts.text ? this.el('p', { class: 'tag', style: 'margin:-12px 0 24px' }, opts.text) : null,
+        this.el('div', { class: 'btn-row', style: 'margin-top:0' }, [
+          this.el('button', { class: 'btn secondary', onclick: () => done(false) }, 'Abbrechen'),
+          this.el('button', { class: 'btn ' + (opts.danger === false ? '' : 'danger'), onclick: () => done(true) }, opts.ok || 'Löschen'),
         ]),
       ]);
+      bd = this.makeSheet(body, 95, () => done(false));
       document.body.appendChild(bd);
     });
   },
 
-  toast(msg) {
+  toast(msg) { this._toast(msg, false); },
+  // Erfolgsmoment: kurzer Haken, der sich zeichnet
+  success(msg) { this._toast(msg, true); },
+  _toast(msg, ok) {
     let t = document.getElementById('toast');
     if (!t) { t = this.el('div', { id: 'toast', class: 'toast' }); document.body.appendChild(t); }
-    t.textContent = msg;
+    t.className = 'toast' + (ok ? '' : ' plain');
+    t.innerHTML = `<span class="ok">${Icons.check()}</span>`;
+    t.appendChild(document.createTextNode(msg));
+    t.classList.remove('show');
+    void t.offsetWidth;
     requestAnimationFrame(() => t.classList.add('show'));
     clearTimeout(this._toastT);
-    this._toastT = setTimeout(() => t.classList.remove('show'), 2600);
+    this._toastT = setTimeout(() => t.classList.remove('show'), 2400);
   },
 
   animateNumber(el, to, opts = {}) {
@@ -272,8 +371,9 @@ const App = {
     const suffix = opts.suffix || '';
     const fmt = (v) => (opts.signed && v > 0.0001 ? '+' : '') + v.toLocaleString('de-DE', { minimumFractionDigits: decimals, maximumFractionDigits: decimals }) + suffix;
     if (!isFinite(to)) { el.textContent = '∞'; return; }
+    if (this.reducedMotion()) { el.textContent = fmt(to); return; }
     const from = opts.from || 0;
-    const duration = opts.duration || 900;
+    const duration = Math.min(opts.duration || 440, 440);
     const start = performance.now();
     if (el._raf) cancelAnimationFrame(el._raf);
     const step = (now) => {
@@ -290,7 +390,7 @@ const App = {
     else { document.documentElement.removeAttribute('data-theme'); theme = 'auto'; }
     try { localStorage.setItem('theme', theme); } catch (e) {}
     const meta = document.querySelector('meta[name="theme-color"]');
-    if (meta) meta.content = getComputedStyle(document.documentElement).getPropertyValue('--bg').trim() || '#07080a';
+    if (meta) meta.content = getComputedStyle(document.documentElement).getPropertyValue('--bg').trim() || '#000000';
   },
 
   currentTheme() {

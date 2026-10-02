@@ -4,11 +4,14 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <title>Trading Journal</title>
-<meta name="theme-color" content="#07080a">
+<meta name="theme-color" content="#f2f2f7" media="(prefers-color-scheme: light)">
+<meta name="theme-color" content="#000000" media="(prefers-color-scheme: dark)">
 <meta name="description" content="Trading Journal 2026: Trades, Analysen, Statistiken, Routine und Trading-Model-Checklisten.">
 <link rel="manifest" href="manifest.json">
-<link rel="icon" href="icons/icon.svg" type="image/svg+xml">
-<link rel="apple-touch-icon" href="icons/icon-192.png">
+<link rel="icon" href="icons/logo-dark.svg" type="image/svg+xml" media="(prefers-color-scheme: light)">
+<link rel="icon" href="icons/logo-light.svg" type="image/svg+xml" media="(prefers-color-scheme: dark)">
+<link rel="icon" href="icons/favicon-64.png" type="image/png" sizes="64x64">
+<link rel="apple-touch-icon" href="icons/apple-touch-icon.png">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-title" content="Journal">
@@ -37,20 +40,30 @@
 </svg>
 
 <div id="splash">
-  <div class="splash-mark">
-    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round">
-      <path pathLength="1" d="M4 20h16"/>
-      <path pathLength="1" d="m5 15 4.5-5 3.5 3.5L19 6"/>
-      <path pathLength="1" d="M15 6h4v4"/>
-    </svg>
+  <div class="splash-logo">
+    <img class="logo-l" src="icons/logo-light.svg" alt="" width="112" height="112">
+    <img class="logo-d" src="icons/logo-dark.svg" alt="" width="112" height="112">
   </div>
   <div class="splash-name">Trading <span>Journal</span></div>
+</div>
+
+<!-- Kompakte Glas-Leiste: erscheint, sobald der grosse Titel aus dem Bild scrollt -->
+<div id="navbar" class="navbar" aria-hidden="true">
+  <div class="navbar-in">
+    <button id="navBack" class="nb hidden" aria-label="Zurück"></button>
+    <div id="navTitle" class="nt"></div>
+    <span></span>
+  </div>
 </div>
 
 <div id="app">
   <header class="topbar">
     <div class="title-wrap">
       <button id="backBtn" class="round-btn" aria-label="Zurück"></button>
+      <div class="brand" aria-hidden="true">
+        <img class="logo-l" src="icons/logo-light.svg" alt="" width="44" height="44">
+        <img class="logo-d" src="icons/logo-dark.svg" alt="" width="44" height="44">
+      </div>
       <div style="min-width:0">
         <div class="overline" id="pageSub"></div>
         <h1 id="pageTitle">Heute</h1>
