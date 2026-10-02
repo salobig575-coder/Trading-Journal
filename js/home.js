@@ -1,68 +1,88 @@
-// Home = "Menu" aus dem Notion: Heute-Ueberblick, Schnellaktionen, Kachel-Menue
+// Home: ruhiger Tagesueberblick – Wochen-Ergebnis, Routine, Schnellzugriffe
 const HomeView = {
   async render() {
     const wrap = App.el('div');
     const trades = await DB.getAll('trades');
+    await Habits.load();
     const today = App.todayStr();
     const wk = App.weekStart(today);
     const week = trades.filter((t) => t.date >= wk && t.date <= App.addDays(wk, 6));
-    const todays = trades.filter((t) => t.date === today);
     const sw = Calc.summary(week);
     const sAll = Calc.summary(trades);
+    const curve = Calc.curve(trades).slice(-28).map((p) => p.value);
 
-    const dateLabel = new Date().toLocaleDateString('de-DE', { weekday: 'long', day: 'numeric', month: 'long' });
-    const netEl = App.el('div', { class: 'num' }, '0R');
-    const hero = App.el('div', { class: 'card hero' }, [
-      App.el('h2', {}, 'Journal 2026 Community'),
-      App.el('div', { style: 'font-size:19px;font-weight:800;margin-bottom:2px' }, `${App.greeting()} 👋`),
-      App.el('div', { style: 'font-size:13px;opacity:.85' }, dateLabel),
-      App.el('div', { class: 'quote', style: 'margin-bottom:14px' }, '“a Year of Data..”'),
-      App.el('div', { class: 'stat-row' }, [
-        App.el('div', { class: 'stat' }, [App.el('div', { class: 'num' }, String(todays.length)), App.el('div', { class: 'lbl' }, 'Trades heute')]),
-        App.el('div', { class: 'stat' }, [netEl, App.el('div', { class: 'lbl' }, 'Woche (Net R)')]),
-        App.el('div', { class: 'stat' }, [App.el('div', { class: 'num' }, `${Math.round(sAll.winrate)}%`), App.el('div', { class: 'lbl' }, 'Winrate gesamt')]),
+    // ---- Hero ----
+    const net = App.el('div', { class: 'big ' + Calc.rClass(sw.net) }, '0R');
+    const hero = App.el('div', { class: 'hero' }, [
+      App.el('div', { class: 'cap' }, `${App.greeting()} · Diese Woche`),
+      net,
+      App.el('div', { class: 'cap' }, week.length ? `${week.length} Trade${week.length === 1 ? '' : 's'} · ${Math.round(sw.winrate)}% Winrate` : 'Noch kein Trade in dieser Woche'),
+      curve.length > 1 ? Charts.spark(curve) : App.el('div', { style: 'height:20px' }),
+      App.el('div', { class: 'hero-stats' }, [
+        App.el('div', {}, [App.el('div', { class: 'v' }, `${Math.round(sAll.winrate)}%`), App.el('div', { class: 'k' }, 'Winrate')]),
+        App.el('div', {}, [App.el('div', { class: 'v' }, String(trades.length)), App.el('div', { class: 'k' }, 'Trades gesamt')]),
+        App.el('div', {}, [App.el('div', { class: 'v ' + Calc.rClass(sAll.net) }, Calc.fmtR(sAll.net, 1)), App.el('div', { class: 'k' }, 'Gesamt')]),
       ]),
     ]);
     wrap.appendChild(hero);
-    App.animateNumber(netEl, sw.net, { decimals: 1, suffix: 'R', signed: true });
+    App.animateNumber(net, sw.net, { decimals: 1, suffix: 'R', signed: true, duration: 1100 });
 
-    // Die drei Schnell-Buttons aus dem Notion
-    wrap.appendChild(App.el('div', { class: 'fab-row' }, [
-      App.el('button', { class: 'btn', onclick: () => TradeForm.open() }, [App.icon('plus'), 'Trade']),
-      App.el('button', { class: 'btn secondary', onclick: () => { App.goTab('analyse', AnalyseHub, 'analysis'); setTimeout(() => AnalysisView.chooseTemplate(), 350); } }, [App.icon('plus'), 'Analyse']),
-      App.el('button', { class: 'btn secondary', onclick: () => { App.goTab('analyse', AnalyseHub, 'review'); setTimeout(() => Collections.edit('review'), 350); } }, [App.icon('plus'), 'Review']),
+    // ---- Routine heute ----
+    const active = Habits.activeOn(today);
+    if (active.length) {
+      const s = Habits.day(today);
+      const ring = Charts.ring(64, 7, s.pct);
+      ring.appendChild(App.el('div', { class: 'ring-in' }, [App.el('div', { style: 'font-family:var(--display);font-weight:700;font-size:15px' }, `${Math.round(s.pct * 100)}%`)]));
+      const st = Habits.streak(today);
+      wrap.appendChild(App.el('button', { class: 'card row', style: 'width:100%;text-align:left;gap:18px;cursor:pointer', onclick: () => App.navigate('routine') }, [
+        ring,
+        App.el('div', { class: 'grow' }, [
+          App.el('div', { style: 'font-weight:600;font-size:16px' }, s.complete ? 'Routine komplett' : 'Deine Routine heute'),
+          App.el('div', { class: 'tag', style: 'margin-top:2px' }, `${s.doneCount} von ${s.count} erledigt · ${s.earned}/${s.max} XP`),
+        ]),
+        st > 0 ? App.el('div', { class: 'streak', style: 'font-size:18px' }, [App.el('span', { html: Icons.flame() }), String(st)]) : App.el('span', { html: Icons.chevronRight(), style: 'width:18px;height:18px;color:var(--dim)' }),
+      ]));
+    }
+
+    // ---- Schnellzugriff ----
+    const quick = (icon, t, s, fn) => App.el('button', { class: 'quick', onclick: fn }, [
+      App.el('div', { class: 'ic', html: Icons[icon]() }),
+      App.el('div', {}, [App.el('div', { class: 't' }, t), App.el('div', { class: 's' }, s)]),
+    ]);
+    wrap.appendChild(App.el('div', { class: 'quick-grid' }, [
+      quick('target', 'Trading Model', 'Bias · Entry · Risk', () => ChecklistPage.open('tradingModel', 'Trading Model')),
+      quick('checklist', 'Checklist', 'Mech & Continuation', () => ChecklistPage.open('modelChecklist', 'Checklist')),
+      quick('clipboard', 'Weekly Tracker', 'Wochenplaner', () => WeeklyTracker.open()),
+      quick('library', 'Bibliothek', 'Mistakes, Edu, Backtests …', () => LibraryPage.open()),
     ]));
+    return wrap;
+  },
+};
 
-    const tile = (name, sub, icon, onclick, i) => App.el('button', { class: 'tile', style: `animation-delay:${i * 35}ms`, onclick }, [
-      App.el('div', { class: 't-ic', html: Icons[icon]() }), App.el('div', { class: 't-name' }, name), App.el('div', { class: 't-sub' }, sub),
-    ]);
-    const section = (title, tiles) => {
-      wrap.appendChild(App.el('div', { class: 'section-title' }, title));
-      wrap.appendChild(App.el('div', { class: 'tile-grid' }, tiles.map((t, i) => tile(...t, i))));
-    };
+const LibraryPage = {
+  open() { App.openPage('Bibliothek', () => this.render()); },
 
-    section('Daily Essentials', [
-      ['Weekly Tracker', 'Wochenplaner', 'clipboard', () => WeeklyTracker.open()],
-      ['Review', 'Review DB', 'review', () => App.goTab('analyse', AnalyseHub, 'review')],
-      ['My Analysis', 'Pre-Session', 'analyse', () => App.goTab('analyse', AnalyseHub, 'analysis')],
-      ['Journal', 'Alle Trades', 'journal', () => App.navigate('journal')],
+  render() {
+    const row = (icon, t, s, fn) => App.el('div', { class: 'item clickable', onclick: fn }, [
+      App.el('div', { class: 'ic', style: 'width:40px;height:40px;border-radius:13px;background:var(--accent-soft);color:var(--accent);display:flex;align-items:center;justify-content:center;flex-shrink:0', html: Icons[icon]() }),
+      App.el('div', { class: 'grow' }, [App.el('div', { class: 'item-title' }, t), App.el('div', { class: 'item-meta' }, s)]),
+      App.el('span', { html: Icons.chevronRight(), style: 'width:18px;height:18px;color:var(--dim)' }),
     ]);
-    section('Performance', [
-      ['Statistics', 'Setups, Zeiten, Ergebnisse', 'stats', () => App.goTab('stats', StatsHub, 'overview')],
-      ['Equity Curve', 'Cumulative R:R', 'trend', () => App.goTab('stats', StatsHub, 'equity')],
-      ['W/L/B Trades', 'Wins, Losses, B/E', 'trophy', () => App.goTab('stats', StatsHub, 'wlb')],
-      ['Monthly Performance', 'Monat für Monat', 'calendar', () => App.goTab('stats', StatsHub, 'months')],
-      ['Mistakes', 'Typische Fehler', 'alert', () => ChecklistPage.open('mistakes', 'Mistakes', 'Write here your common mistakes, and try to avoid them next time')],
-      ['Trading Model', 'Checkliste', 'target', () => ChecklistPage.open('tradingModel', 'Trading Model', 'Paste here your trading model')],
-    ]);
-    section('Resource Vault', [
-      ['Edu Content', 'Lerninhalte', 'book', () => Collections.page('edu')],
-      ['Bio Concepts', 'Konzepte', 'dna', () => Collections.page('bio')],
-      ['Backtests', 'Nach Jahr', 'flask', () => Collections.page('backtests')],
-    ]);
-    section('Prop Firms', [
-      ['Prop Firms', 'Firmen & Regeln', 'shield', () => Collections.page('propfirms')],
-    ]);
+    const wrap = App.el('div');
+    wrap.appendChild(App.el('div', { class: 'section-title', style: 'margin-top:4px' }, 'Performance'));
+    wrap.appendChild(App.el('div', { class: 'list' }, [
+      row('alert', 'Mistakes', 'Typische Fehler vermeiden', () => ChecklistPage.open('mistakes', 'Mistakes', 'Write here your common mistakes, and try to avoid them next time')),
+    ]));
+    wrap.appendChild(App.el('div', { class: 'section-title' }, 'Resource Vault'));
+    wrap.appendChild(App.el('div', { class: 'list' }, [
+      row('book', 'Edu Content', 'Lerninhalte', () => Collections.page('edu')),
+      row('dna', 'Bio Concepts', 'Konzepte', () => Collections.page('bio')),
+      row('flask', 'Backtests', 'Nach Jahr sortiert', () => Collections.page('backtests')),
+    ]));
+    wrap.appendChild(App.el('div', { class: 'section-title' }, 'Prop Firms'));
+    wrap.appendChild(App.el('div', { class: 'list' }, [
+      row('shield', 'Prop Firms', 'Firmen & Regeln', () => Collections.page('propfirms')),
+    ]));
     return wrap;
   },
 };

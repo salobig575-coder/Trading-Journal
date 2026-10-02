@@ -1,4 +1,52 @@
 const Charts = {
+  // Fortschrittsring; node.set(0..1) animiert den Fuellstand
+  ring(size, stroke, pct = 0) {
+    const r = (size - stroke) / 2, c = 2 * Math.PI * r;
+    const wrap = App.el('div', { class: 'ring', style: `width:${size}px;height:${size}px` });
+    wrap.innerHTML = `<svg width="${size}" height="${size}" viewBox="0 0 ${size} ${size}">
+      <circle class="ring-bg" cx="${size / 2}" cy="${size / 2}" r="${r}" stroke-width="${stroke}"/>
+      <circle class="ring-fg" cx="${size / 2}" cy="${size / 2}" r="${r}" stroke-width="${stroke}" stroke-dasharray="${c}" stroke-dashoffset="${c}"/>
+    </svg>`;
+    const fg = wrap.querySelector('.ring-fg');
+    wrap.set = (p) => { fg.style.strokeDashoffset = c * (1 - Math.max(0, Math.min(1, p))); };
+    requestAnimationFrame(() => requestAnimationFrame(() => wrap.set(pct)));
+    return wrap;
+  },
+
+  // Kleine Verlaufslinie ohne Achsen (Hero)
+  spark(values, opts = {}) {
+    const w = 320, h = opts.height || 74, pad = 6;
+    const wrap = App.el('div', { class: 'spark' });
+    if (values.length < 2) { return wrap; }
+    const min = Math.min(...values), max = Math.max(...values), range = max - min || 1;
+    const pts = values.map((v, i) => [pad + (i / (values.length - 1)) * (w - pad * 2), pad + (1 - (v - min) / range) * (h - pad * 2)]);
+    // weiche Kurve (Catmull-Rom -> Bezier)
+    let d = `M${pts[0][0].toFixed(1)},${pts[0][1].toFixed(1)}`;
+    for (let i = 0; i < pts.length - 1; i++) {
+      const p0 = pts[i - 1] || pts[i], p1 = pts[i], p2 = pts[i + 1], p3 = pts[i + 2] || p2;
+      const c1 = [p1[0] + (p2[0] - p0[0]) / 6, p1[1] + (p2[1] - p0[1]) / 6];
+      const c2 = [p2[0] - (p3[0] - p1[0]) / 6, p2[1] - (p3[1] - p1[1]) / 6];
+      d += ` C${c1[0].toFixed(1)},${c1[1].toFixed(1)} ${c2[0].toFixed(1)},${c2[1].toFixed(1)} ${p2[0].toFixed(1)},${p2[1].toFixed(1)}`;
+    }
+    const gid = 's' + Math.random().toString(36).slice(2, 7);
+    const last = pts.at(-1);
+    wrap.innerHTML = `<svg viewBox="0 0 ${w} ${h}" preserveAspectRatio="none" style="width:100%;height:${h}px;overflow:visible">
+      <defs><linearGradient id="${gid}" x1="0" y1="0" x2="0" y2="1"><stop offset="0" style="stop-color:var(--accent);stop-opacity:.28"/><stop offset="1" style="stop-color:var(--accent);stop-opacity:0"/></linearGradient></defs>
+      <path class="sp-area" d="${d} L${last[0]},${h} L${pts[0][0]},${h} Z" fill="url(#${gid})" style="opacity:0"/>
+      <path class="sp-line" d="${d}" fill="none" stroke="var(--accent)" stroke-width="2.4" stroke-linecap="round" vector-effect="non-scaling-stroke"/>
+    </svg>`;
+    requestAnimationFrame(() => {
+      const line = wrap.querySelector('.sp-line'), area = wrap.querySelector('.sp-area');
+      const len = line.getTotalLength();
+      line.style.strokeDasharray = len; line.style.strokeDashoffset = len;
+      line.getBoundingClientRect();
+      line.style.transition = 'stroke-dashoffset 1.4s cubic-bezier(.22,1,.36,1) .2s';
+      area.style.transition = 'opacity 1s ease .8s';
+      requestAnimationFrame(() => { line.style.strokeDashoffset = 0; area.style.opacity = 1; });
+    });
+    return wrap;
+  },
+
   // Equity-Kurve (kumulierte R) mit Null-Linie und Touch-Scrubber
   equity(curve, opts = {}) {
     const width = 340, height = opts.height || 170;

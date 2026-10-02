@@ -46,7 +46,7 @@ const Collections = {
             c.body ? App.el('div', { class: 'item-meta' }, c.body.slice(0, 90)) : null,
             (c.tags && c.tags.length) ? App.el('div', { class: 'pills' }, c.tags.map((t) => UI.pill(t))) : null,
           ]),
-          App.el('button', { class: 'icon-btn del', html: Icons.trash(), onclick: async (e) => { e.stopPropagation(); if (UI.confirm('Eintrag löschen?')) { await DB.delete('collections', c.id); App.refresh(); } } }),
+          App.el('button', { class: 'icon-btn del', html: Icons.trash(), onclick: async (e) => { e.stopPropagation(); if (await App.confirm('Eintrag löschen?')) { await DB.delete('collections', c.id); App.refresh(); } } }),
         ]));
       });
       list.appendChild(l);

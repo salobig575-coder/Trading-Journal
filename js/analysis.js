@@ -39,18 +39,6 @@ const AnalysisTemplates = {
 };
 const DAY_KEYS = [['mon', 'Monday'], ['tue', 'Tuesday'], ['wed', 'Wednesday'], ['thu', 'Thursday'], ['fri', 'Friday']];
 
-const AnalyseHub = {
-  activeTab: 'analysis',
-  tabs: [{ key: 'analysis', label: 'My Analysis' }, { key: 'review', label: 'Review' }],
-
-  async render() {
-    const wrap = App.el('div');
-    wrap.appendChild(App.tabBar(this.tabs, this.activeTab, (k) => { this.activeTab = k; App.refresh(); }));
-    wrap.appendChild(this.activeTab === 'review' ? await Collections.listView('review') : await AnalysisView.render());
-    return wrap;
-  },
-};
-
 const AnalysisView = {
   type: 'all',
   q: '',
@@ -89,7 +77,7 @@ const AnalysisView = {
             App.el('div', { class: 'item-meta' }, `${a.type} · ${App.formatDate(a.date)}`),
             (a.pairs && a.pairs.length) ? App.el('div', { class: 'pills' }, a.pairs.map((p) => UI.pill(p))) : null,
           ]),
-          App.el('button', { class: 'icon-btn del', html: Icons.trash(), onclick: async (e) => { e.stopPropagation(); if (UI.confirm('Analyse löschen?')) { await DB.delete('analyses', a.id); App.refresh(); } } }),
+          App.el('button', { class: 'icon-btn del', html: Icons.trash(), onclick: async (e) => { e.stopPropagation(); if (await App.confirm('Analyse löschen?')) { await DB.delete('analyses', a.id); App.refresh(); } } }),
         ]));
       });
     };

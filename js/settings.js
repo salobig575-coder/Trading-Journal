@@ -98,7 +98,7 @@ const SettingsView = {
       if (Sync.error) note(Sync.error, 'tag neg');
       card.appendChild(App.el('div', { class: 'btn-row' }, [
         App.el('button', { class: 'btn', onclick: async () => { card.querySelector('.btn').textContent = 'Synchronisiere …'; await Sync.run(); draw(); } }, [App.icon('upload'), 'Jetzt abgleichen']),
-        App.el('button', { class: 'btn secondary', onclick: () => { if (UI.confirm('Abmelden? Die Daten bleiben auf diesem Gerät erhalten.')) { Sync.signOut(); draw(); } } }, 'Abmelden'),
+        App.el('button', { class: 'btn secondary', onclick: async () => { if (await App.confirm('Abmelden?', { text: 'Deine Daten bleiben auf diesem Gerät erhalten.', ok: 'Abmelden', danger: false })) { Sync.signOut(); draw(); } } }, 'Abmelden'),
       ]));
     };
     draw();
@@ -154,7 +154,7 @@ const SettingsView = {
       App.closeModal();
       App.refresh();
     } catch (e) {
-      alert('Backup konnte nicht gelesen werden: ' + e.message);
+      App.toast('Diese Backup-Datei konnte nicht gelesen werden.');
     }
   },
 };

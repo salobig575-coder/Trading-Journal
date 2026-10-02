@@ -6,12 +6,10 @@ const StatsHub = {
   wlb: 'win',
   tabs: [
     { key: 'overview', label: 'Übersicht' },
-    { key: 'equity', label: 'Equity Curve' },
-    { key: 'months', label: 'Monthly' },
+    { key: 'equity', label: 'Equity' },
     { key: 'calendar', label: 'Kalender' },
     { key: 'setups', label: 'Setups' },
     { key: 'time', label: 'Zeit' },
-    { key: 'wlb', label: 'W/L/B' },
   ],
 
   async render() {
@@ -19,12 +17,15 @@ const StatsHub = {
     wrap.appendChild(App.tabBar(this.tabs, this.activeTab, (k) => { this.activeTab = k; App.refresh(); }));
     const trades = await DB.getAll('trades');
     if (!trades.length) {
-      wrap.appendChild(App.empty('stats', 'Noch keine Trades – sobald du Trades einträgst, siehst du hier deine Statistiken.'));
-      wrap.appendChild(App.el('button', { class: 'btn secondary', onclick: async () => { await Seed.loadDemo(); App.refresh(); } }, [App.icon('sparkles'), 'Demo-Daten laden (zum Ausprobieren)']));
+      wrap.appendChild(App.empty('stats', 'Sobald du Trades einträgst, entstehen hier deine Statistiken.'));
+      wrap.appendChild(App.el('button', { class: 'btn secondary', onclick: async () => { await Seed.loadDemo(); App.refresh(); } }, [App.icon('sparkles'), 'Mit Demo-Daten ausprobieren']));
       return wrap;
     }
-    const fn = { overview: 'overview', equity: 'equity', months: 'months', calendar: 'calendar', setups: 'setups', time: 'time', wlb: 'wlb' }[this.activeTab];
-    wrap.appendChild(this[fn](trades));
+    const tab = this.tabs.some((t) => t.key === this.activeTab) ? this.activeTab : 'overview';
+    if (tab === 'calendar') {
+      wrap.appendChild(this.calendar(trades));
+      wrap.appendChild(this.months(trades));
+    } else wrap.appendChild(this[tab](trades));
     return wrap;
   },
 
@@ -99,10 +100,6 @@ const StatsHub = {
     const rows = Calc.group(inYear, (t) => Number(t.date.slice(5, 7)) - 1).map((r) => ({ ...r, key: r.key }));
     const byMonth = new Map(rows.map((r) => [r.key, r]));
     const full = Array.from({ length: 12 }, (_, m) => byMonth.get(m) || { key: m, n: 0, wins: 0, losses: 0, winrate: 0, net: 0 });
-    const s = Calc.summary(inYear);
-    wrap.appendChild(App.el('div', { class: 'stat-grid three' }, [
-      this.tile('Trades', String(s.total)), this.tile('Winrate', `${Math.round(s.winrate)}%`), this.tile('Net R', Calc.fmtR(s.net, 1), Calc.rClass(s.net)),
-    ]));
     wrap.appendChild(this.card('Monthly Performance', 'calendar', Charts.bars(full.map((r) => ({ label: App.monthName(r.key), value: Math.round(r.net * 100) / 100 })), { height: 120 })));
     wrap.appendChild(this.card('Monate', 'calendar', Charts.statRows(full.filter((r) => r.n).map((r) => ({ ...r, key: App.monthName(r.key) + ' ' + this.year })), { sort: (a, b) => 0 })));
     return wrap;

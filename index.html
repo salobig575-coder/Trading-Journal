@@ -4,8 +4,8 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <title>Trading Journal</title>
-<meta name="theme-color" content="#6d4aff">
-<meta name="description" content="Trading Journal 2026: Trades, Analysen, Statistiken, Equity Curve, Wochenplaner und Trading-Model-Checkliste.">
+<meta name="theme-color" content="#07080a">
+<meta name="description" content="Trading Journal 2026: Trades, Analysen, Statistiken, Routine und Trading-Model-Checklisten.">
 <link rel="manifest" href="manifest.json">
 <link rel="icon" href="icons/icon.svg" type="image/svg+xml">
 <link rel="apple-touch-icon" href="icons/icon-192.png">
@@ -13,6 +13,8 @@
 <meta name="mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-title" content="Journal">
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link rel="stylesheet" href="css/style.css">
 <script>
   (function () {
@@ -25,39 +27,49 @@
 </head>
 <body>
 
+<svg width="0" height="0" style="position:absolute" aria-hidden="true">
+  <defs>
+    <linearGradient id="goldGrad" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" style="stop-color:var(--accent-2)"/>
+      <stop offset="1" style="stop-color:var(--accent)"/>
+    </linearGradient>
+  </defs>
+</svg>
+
 <div id="splash">
-  <div class="splash-logo">
-    <svg viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-      <path d="M4 20h16"/><path d="m5 15 4.5-5 3.5 3.5L19 6"/><path d="M15 6h4v4"/>
+  <div class="splash-mark">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round">
+      <path pathLength="1" d="M4 20h16"/>
+      <path pathLength="1" d="m5 15 4.5-5 3.5 3.5L19 6"/>
+      <path pathLength="1" d="M15 6h4v4"/>
     </svg>
   </div>
-  <div class="splash-title">Trading Journal</div>
-  <div class="splash-sub">a Year of Data..</div>
-  <div class="splash-dots"><span></span><span></span><span></span></div>
+  <div class="splash-name">Trading <span>Journal</span></div>
 </div>
 
 <div id="app">
   <header class="topbar">
     <div class="title-wrap">
-      <button id="backBtn" class="round-btn" title="Zurück"></button>
+      <button id="backBtn" class="round-btn" aria-label="Zurück"></button>
       <div style="min-width:0">
-        <h1 id="pageTitle">Journal 2026</h1>
-        <div class="sub" id="pageSub"></div>
+        <div class="overline" id="pageSub"></div>
+        <h1 id="pageTitle">Heute</h1>
       </div>
     </div>
-    <button id="settingsBtn" class="round-btn" title="Einstellungen"></button>
+    <button id="settingsBtn" class="round-btn" aria-label="Einstellungen"></button>
   </header>
   <main id="view"></main>
-  <div class="nav-wrap">
-    <nav class="bottomnav">
-      <div class="nav-indicator" id="navIndicator"></div>
-      <button data-route="home"><span class="ic"></span>Home</button>
-      <button data-route="journal"><span class="ic"></span>Journal</button>
-      <button data-route="analyse"><span class="ic"></span>Analyse</button>
-      <button data-route="stats"><span class="ic"></span>Statistik</button>
-    </nav>
-  </div>
 </div>
+
+<nav class="dock">
+  <div class="dock-in">
+    <button class="tab" data-route="home"><span class="ic"></span>Heute</button>
+    <button class="tab" data-route="journal"><span class="ic"></span>Journal</button>
+    <button class="fab" id="fab" aria-label="Neu erfassen"></button>
+    <button class="tab" data-route="routine"><span class="ic"></span>Routine</button>
+    <button class="tab" data-route="stats"><span class="ic"></span>Statistik</button>
+  </div>
+</nav>
 
 <script src="js/icons.js"></script>
 <script src="js/db.js"></script>
@@ -67,7 +79,9 @@
 <script src="js/app.js"></script>
 <script src="js/ui.js"></script>
 <script src="js/charts.js"></script>
+<script src="js/fx.js"></script>
 <script src="js/seed.js"></script>
+<script src="js/habits.js"></script>
 <script src="js/journal.js"></script>
 <script src="js/analysis.js"></script>
 <script src="js/collections.js"></script>

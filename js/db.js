@@ -1,6 +1,10 @@
 const DB_NAME = 'trading-journal-db';
-const DB_VERSION = 1;
-const DB_STORES = ['trades', 'analyses', 'collections', 'checklists', 'weeks', 'settings'];
+const DB_VERSION = 2;
+const DB_STORES = ['trades', 'analyses', 'collections', 'checklists', 'weeks', 'settings', 'habits', 'habitLogs'];
+// Stores mit "id" als Schluessel (alle anderen nutzen "key")
+const DB_ID_STORES = ['trades', 'analyses', 'collections', 'habits', 'habitLogs'];
+// Einstellungen, die mit der Cloud abgeglichen werden
+const DB_SYNC_SETTINGS = ['options', 'habitSettings'];
 
 function openDB() {
   return new Promise((resolve, reject) => {
@@ -22,9 +26,25 @@ function openDB() {
       if (!db.objectStoreNames.contains('checklists')) db.createObjectStore('checklists', { keyPath: 'key' });
       if (!db.objectStoreNames.contains('weeks')) db.createObjectStore('weeks', { keyPath: 'key' });
       if (!db.objectStoreNames.contains('settings')) db.createObjectStore('settings', { keyPath: 'key' });
+      if (!db.objectStoreNames.contains('habits')) db.createObjectStore('habits', { keyPath: 'id' });
+      if (!db.objectStoreNames.contains('habitLogs')) {
+        const s = db.createObjectStore('habitLogs', { keyPath: 'id' });
+        s.createIndex('date', 'date');
+      }
     };
-    req.onsuccess = () => resolve(req.result);
+    let blockedTimer = null;
+    req.onsuccess = () => {
+      clearTimeout(blockedTimer);
+      const db = req.result;
+      // Aeltere offene Tabs/App-Fenster geben die DB frei, wenn eine neue Version startet
+      db.onversionchange = () => { db.close(); location.reload(); };
+      resolve(db);
+    };
     req.onerror = () => reject(req.error);
+    req.onblocked = () => {
+      // Ein altes Fenster haelt noch die alte DB-Version offen
+      blockedTimer = setTimeout(() => { try { document.body.innerHTML = '<p style="font:15px sans-serif;padding:40px;text-align:center;color:#999">Bitte schließe andere Fenster dieser App und lade neu.</p>'; } catch (e) {} }, 8000);
+    };
   });
 }
 
@@ -55,7 +75,7 @@ const DB = {
 
   // Welche Datensaetze werden mit Supabase synchronisiert?
   syncable(storeName, obj) {
-    if (storeName === 'settings') return !!obj && obj.key === 'options';
+    if (storeName === 'settings') return !!obj && DB_SYNC_SETTINGS.includes(obj.key);
     return DB_STORES.includes(storeName);
   },
 

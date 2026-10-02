@@ -5,6 +5,33 @@ const Seed = {
   },
 
   async run() {
+    await this.runMain();
+    await this.runExtras();
+  },
+
+  // Zweite Stufe: Notion-"Checklist" (Mech/Continuation) + Start-Gewohnheiten
+  async runExtras() {
+    if (await DB.getSetting('seeded2', false)) return;
+    const I = (t, c) => this.item(t, c);
+    await DB.putRaw('checklists', {
+      key: 'modelChecklist',
+      sections: [
+        { title: 'Mech Model Checklist', items: [I('ES inversed too / no closer 5m/15m FVG on ES')] },
+        { title: 'Continuation Model Checklist', items: [] },
+      ],
+    });
+    const today = App.todayStr();
+    const defaults = [
+      ['Pre-Market-Analyse', 3], ['Trading-Checklist durchgehen', 2], ['Regeln eingehalten (Risk, max. 2 Trades)', 5],
+      ['Journal geschrieben', 3], ['Gym / Bewegung', 2], ['Backtest', 3],
+    ];
+    for (let i = 0; i < defaults.length; i++) {
+      await DB.putRaw('habits', { id: 'seed-habit-' + (i + 1), name: defaults[i][0], xp: defaults[i][1], order: i + 1, createdDate: today });
+    }
+    await DB.putRaw('settings', { key: 'seeded2', value: true });
+  },
+
+  async runMain() {
     if (await DB.getSetting('seeded', false)) return;
     const I = (t, c) => this.item(t, c);
 

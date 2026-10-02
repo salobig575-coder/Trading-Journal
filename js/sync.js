@@ -1,6 +1,6 @@
 // Supabase-Sync (nur fetch, keine Abhaengigkeiten). Lokal bleibt IndexedDB der Hauptspeicher (offline-faehig),
 // Supabase ist der Abgleich zwischen Geraeten. Konflikte: letzte Aenderung pro Datensatz gewinnt.
-const SYNC_STORES = ['trades', 'analyses', 'collections', 'checklists', 'weeks', 'settings'];
+const SYNC_STORES = DB_STORES;
 
 const Sync = {
   running: false,
@@ -122,7 +122,7 @@ const Sync = {
       for (const row of rows) {
         if (row.synced_at > maxSeen) maxSeen = row.synced_at;
         if (!SYNC_STORES.includes(row.store)) continue;
-        const keyField = ['trades', 'analyses', 'collections'].includes(row.store) ? 'id' : 'key';
+        const keyField = DB_ID_STORES.includes(row.store) ? 'id' : 'key';
         const local = await DB.get(row.store, row.id);
         const localU = local ? (local._u || 0) : 0;
         const t = tomb.find((x) => x.store === row.store && x.id === row.id);
@@ -149,10 +149,10 @@ const Sync = {
     for (const store of SYNC_STORES) {
       const items = await DB.getAll(store);
       for (const it of items) {
-        if (store === 'settings' && it.key !== 'options') continue;
+        if (!DB.syncable(store, it)) continue;
         const u = it._u === undefined ? 1 : it._u;
         if (u <= (it._s || 0)) continue;
-        const id = ['trades', 'analyses', 'collections'].includes(store) ? it.id : it.key;
+        const id = DB_ID_STORES.includes(store) ? it.id : it.key;
         const { _s, ...data } = it;
         rows.push({ user_id: uid, store, id, data: { ...data, _u: u }, deleted: false, updated_at: u });
         marks.push({ store, item: it, u });
@@ -168,7 +168,7 @@ const Sync = {
       }, token);
     }
     for (const m of marks) {
-      const fresh = await DB.get(m.store, m.store === 'settings' || ['checklists', 'weeks'].includes(m.store) ? m.item.key : m.item.id);
+      const fresh = await DB.get(m.store, DB_ID_STORES.includes(m.store) ? m.item.id : m.item.key);
       if (fresh && (fresh._u === undefined ? 1 : fresh._u) === m.u) await DB.putRaw(m.store, { ...fresh, _s: m.u });
     }
     if (tomb.length) {

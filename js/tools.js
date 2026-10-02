@@ -5,7 +5,7 @@ const ChecklistPage = {
       const doc = await DB.get('checklists', key);
       const wrap = App.el('div');
       if (hint) wrap.appendChild(App.el('div', { class: 'tag', style: 'margin:0 2px 12px;font-style:italic' }, hint));
-      wrap.appendChild(UI.checklist(doc || { key, sections: [{ title: '', items: [] }] }, { progressLabel: title, multiSection: key === 'tradingModel' }));
+      wrap.appendChild(UI.checklist(doc || { key, sections: [{ title: '', items: [] }] }, { progressLabel: title, multiSection: key === 'tradingModel' || key === 'modelChecklist' }));
       return wrap;
     });
   },
@@ -61,7 +61,7 @@ const WeeklyTracker = {
     } }, [
       App.el('span', { class: 'chev', html: Icons.chevronDown() }),
       App.el('span', { class: 'grow' }, this.weekLabel(w)),
-      App.el('button', { class: 'icon-btn del', html: Icons.trash(), onclick: async (e) => { e.stopPropagation(); if (UI.confirm('Woche löschen?')) { await DB.delete('weeks', w.key); App.refresh(); } } }),
+      App.el('button', { class: 'icon-btn del', html: Icons.trash(), onclick: async (e) => { e.stopPropagation(); if (await App.confirm('Woche löschen?')) { await DB.delete('weeks', w.key); App.refresh(); } } }),
     ]);
 
     const textInput = (get, set, placeholder) => {

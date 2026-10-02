@@ -1,4 +1,4 @@
-const CACHE_NAME = 'trading-journal-v2';
+const CACHE_NAME = 'trading-journal-v3';
 const ASSETS = [
   './',
   './index.html',
@@ -12,6 +12,8 @@ const ASSETS = [
   './js/ui.js',
   './js/charts.js',
   './js/seed.js',
+  './js/fx.js',
+  './js/habits.js',
   './js/journal.js',
   './js/analysis.js',
   './js/collections.js',

@@ -70,7 +70,7 @@ const UI = {
     const input = App.el('input', { type: 'file', accept: 'image/*', multiple: true, style: 'display:none' });
     input.addEventListener('change', async () => {
       for (const f of input.files) {
-        try { list.push(await UI.compressImage(f)); } catch (e) { alert(e.message); }
+        try { list.push(await UI.compressImage(f)); } catch (e) { App.toast('Dieses Bild konnte nicht geladen werden.'); }
       }
       input.value = '';
       draw();
@@ -100,8 +100,6 @@ const UI = {
     return App.el('div', {}, (images || []).map((src) => App.el('img', { class: 'img-big', src, alt: '', onclick: () => UI.lightbox(src) })));
   },
 
-  confirm(msg) { return window.confirm(msg); },
-
   pill(text, kind = '') {
     return App.el('span', { class: 'pill ' + kind }, text);
   },
@@ -123,15 +121,12 @@ const UI = {
     }, { done: 0, total: 0 });
 
     const progressNode = App.el('div', { class: 'card' });
+    const cnt = App.el('div', { class: 'tag' });
+    const bar = App.el('div', { class: 'progress' }, [App.el('i')]);
+    progressNode.append(App.el('div', { class: 'row between', style: 'margin-bottom:12px' }, [App.el('div', { class: 'item-title' }, opts.progressLabel || 'Fortschritt'), cnt]), bar);
     const updateProgress = () => {
       const t = doc.sections.reduce((acc, s) => { const c = countAll(s.items); return { done: acc.done + c.done, total: acc.total + c.total }; }, { done: 0, total: 0 });
-      progressNode.innerHTML = '';
-      progressNode.appendChild(App.el('div', { class: 'row', style: 'justify-content:space-between' }, [
-        App.el('div', { class: 'item-title' }, opts.progressLabel || 'Fortschritt'),
-        App.el('div', { class: 'tag' }, `${t.done} / ${t.total}`),
-      ]));
-      const bar = App.el('div', { class: 'progress' }, [App.el('i')]);
-      progressNode.appendChild(bar);
+      cnt.textContent = `${t.done} / ${t.total}`;
       requestAnimationFrame(() => { bar.firstChild.style.width = (t.total ? (t.done / t.total) * 100 : 0) + '%'; });
     };
 
@@ -142,8 +137,9 @@ const UI = {
           class: 'checkbox' + (it.checked ? ' checked' : ''), html: Icons.check(),
           onclick: (e) => {
             it.checked = !it.checked;
-            e.currentTarget.classList.toggle('checked', it.checked);
-            e.currentTarget.classList.add('pop');
+            const btn = e.currentTarget;
+            btn.classList.toggle('checked', it.checked);
+            if (it.checked) { btn.classList.add('pop'); setTimeout(() => btn.classList.remove('pop'), 650); }
             row.classList.toggle('done', it.checked);
             save(); updateProgress();
           },
@@ -172,14 +168,14 @@ const UI = {
       updateProgress();
       wrap.appendChild(progressNode);
       doc.sections.forEach((sec) => {
-        const card = App.el('div', { class: 'card cl-sec' });
+        const card = App.el('div', { class: 'card' });
         if (sec.title || editMode) {
           const titleRow = App.el('div', { class: 'cl-title' });
           if (editMode) {
             const ti = App.el('input', { type: 'text', value: sec.title || '', placeholder: 'Abschnitt' });
             ti.addEventListener('change', () => { sec.title = ti.value; save(); });
             titleRow.appendChild(App.el('div', { class: 'grow' }, [ti]));
-            titleRow.appendChild(App.el('button', { class: 'icon-btn del', html: Icons.trash(), onclick: () => { if (UI.confirm('Abschnitt löschen?')) { doc.sections.splice(doc.sections.indexOf(sec), 1); save(); draw(); } } }));
+            titleRow.appendChild(App.el('button', { class: 'icon-btn del', html: Icons.trash(), onclick: async () => { if (await App.confirm('Abschnitt löschen?')) { doc.sections.splice(doc.sections.indexOf(sec), 1); save(); draw(); } } }));
           } else titleRow.appendChild(App.el('span', {}, sec.title));
           card.appendChild(titleRow);
         }

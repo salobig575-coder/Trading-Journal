@@ -1,6 +1,22 @@
 // Journal: Trade-Liste (Tabelle/Galerie, Filter), Detail-Ansicht, Formular
+// Journal-Hub: Trades | Analysen | Reviews
+const JournalHub = {
+  activeTab: 'trades',
+  tabs: [{ key: 'trades', label: 'Trades' }, { key: 'analysis', label: 'Analysen' }, { key: 'review', label: 'Reviews' }],
+
+  async render() {
+    const wrap = App.el('div');
+    wrap.appendChild(App.tabBar(this.tabs, this.activeTab, (k) => { this.activeTab = k; App.refresh(); }));
+    if (this.activeTab === 'analysis') wrap.appendChild(await AnalysisView.render());
+    else if (this.activeTab === 'review') wrap.appendChild(await Collections.listView('review'));
+    else wrap.appendChild(await JournalView.render());
+    return wrap;
+  },
+};
+
 const JournalView = {
   range: 'all',      // all | today | week | month
+  outcome: 'all',    // all | win | loss | be | tape
   layout: 'list',    // list | gallery
   q: '',
   monthKey: App.todayStr().slice(0, 7),
@@ -9,13 +25,13 @@ const JournalView = {
     const wrap = App.el('div');
     const all = Calc.sort(await DB.getAll('trades')).reverse();
 
-    wrap.appendChild(App.tabBar(
-      [{ key: 'all', label: 'Alle' }, { key: 'today', label: 'Heute' }, { key: 'week', label: 'Woche' }, { key: 'month', label: 'Monat' }],
-      this.range, (k) => { this.range = k; App.refresh(); }
-    ));
-
-    wrap.appendChild(App.el('button', { class: 'btn', onclick: () => TradeForm.open() }, [App.icon('plus', 18), 'Neuer Trade']));
-    wrap.appendChild(App.el('div', { style: 'height:12px' }));
+    const chipsFor = (opts, current, set, kinds = {}) => App.el('div', { class: 'chip-scroll' }, opts.map(([k, label]) => App.el('button', {
+      class: `chip ${kinds[k] || ''}` + (current === k ? ' active' : ''), onclick: () => { set(k); App.refresh(); },
+    }, label)));
+    wrap.appendChild(App.el('div', { class: 'filters' }, [
+      chipsFor([['all', 'Alle'], ['today', 'Heute'], ['week', 'Woche'], ['month', 'Monat']], this.range, (k) => { this.range = k; }),
+      chipsFor([['all', 'Alle Ergebnisse'], ['win', 'Wins'], ['loss', 'Losses'], ['be', 'B/E'], ['tape', 'Tape']], this.outcome, (k) => { this.outcome = k; }, { win: 'win', loss: 'loss', be: 'be' }),
+    ]));
 
     if (this.range === 'month') {
       const [y, m] = this.monthKey.split('-').map(Number);
@@ -30,6 +46,7 @@ const JournalView = {
     const today = App.todayStr();
     const wk = App.weekStart(today);
     let list = all.filter((t) => {
+      if (this.outcome !== 'all' && Calc.outcome(t) !== this.outcome) return false;
       if (this.range === 'today') return t.date === today;
       if (this.range === 'week') return t.date >= wk && t.date <= App.addDays(wk, 6);
       if (this.range === 'month') return (t.date || '').startsWith(this.monthKey);
@@ -38,10 +55,10 @@ const JournalView = {
 
     const searchInput = App.el('input', { type: 'text', placeholder: 'Trades durchsuchen…', value: this.q });
     const layoutBtn = (key, icon) => App.el('button', {
-      class: 'round-btn', style: this.layout === key ? 'color:var(--accent);border-color:var(--accent)' : '',
+      class: 'round-btn', style: this.layout === key ? 'color:var(--accent);border-color:rgba(var(--accent-rgb),.6)' : '',
       html: Icons[icon](), onclick: () => { this.layout = key; App.refresh(); },
     });
-    wrap.appendChild(App.el('div', { class: 'row', style: 'margin-bottom:12px' }, [
+    wrap.appendChild(App.el('div', { class: 'row', style: 'margin-bottom:16px' }, [
       App.el('div', { class: 'search-wrap' }, [App.el('span', { html: Icons.search() }), searchInput]),
       layoutBtn('list', 'list'), layoutBtn('gallery', 'grid'),
     ]));
@@ -57,7 +74,11 @@ const JournalView = {
       summaryNode.innerHTML = '';
       listNode.innerHTML = '';
       if (filtered.length) summaryNode.appendChild(this.summaryStrip(filtered));
-      if (!filtered.length) { listNode.appendChild(App.empty('journal', all.length ? 'Keine Trades in dieser Auswahl.' : 'Noch keine Trades – lege deinen ersten an.')); return; }
+      if (!filtered.length) {
+        listNode.appendChild(App.empty('journal', all.length ? 'Keine Trades in dieser Auswahl.' : 'Noch keine Trades. Dein erster Eintrag ist der wichtigste.'));
+        if (!all.length) listNode.appendChild(App.el('button', { class: 'btn', onclick: () => TradeForm.open() }, [App.icon('plus'), 'Ersten Trade eintragen']));
+        return;
+      }
       listNode.appendChild(this.tradeList(filtered, this.layout));
     };
     searchInput.addEventListener('input', () => { this.q = searchInput.value; draw(); });
@@ -147,7 +168,7 @@ const TradeDetail = {
       grid, ...texts, ...imgs,
       App.el('div', { class: 'btn-row' }, [
         App.el('button', { class: 'btn secondary', onclick: () => { App.closeModal(); TradeForm.open(t); } }, [App.icon('edit'), 'Bearbeiten']),
-        App.el('button', { class: 'btn danger', onclick: async () => { if (UI.confirm('Trade wirklich löschen?')) { await DB.delete('trades', t.id); App.closeModal(); App.refresh(); } } }, [App.icon('trash'), 'Löschen']),
+        App.el('button', { class: 'btn danger', onclick: async () => { if (await App.confirm('Trade löschen?')) { await DB.delete('trades', t.id); App.closeModal(); App.refresh(); } } }, [App.icon('trash'), 'Löschen']),
       ]),
       App.el('button', { class: 'btn secondary', style: 'margin-top:10px', onclick: () => App.closeModal() }, 'Schließen'),
     ]);
@@ -195,20 +216,21 @@ const TradeForm = {
     };
 
     // Zusatzfelder (Archiv-Journal) einklappbar
-    const more = App.el('div', { style: 'display:none' }, [
+    const more = App.el('div', { class: 'card', style: 'display:none' }, [
       UI.field('Macro (Killzone)', f.macro), UI.field('Rating', f.rating), UI.field('Entry-Typ', f.entryTypes),
       UI.field('Bias-Ergebnis (W/L)', f.bias), UI.field('P/L', f.pl),
       App.el('div', { class: 'field-grid' }, [UI.field('SL (Punkte)', sl), UI.field('TP (Punkte)', tp)]),
       UI.field('Trade idea', idea), UI.field('What can I improve', improve), UI.field('Foto', img.photo),
     ]);
-    const moreBtn = App.el('button', { type: 'button', class: 'btn secondary', style: 'margin-bottom:14px', onclick: () => {
+    const moreBtn = App.el('button', { type: 'button', class: 'btn secondary', style: 'margin-bottom:16px', onclick: () => {
       const open = more.style.display === 'none';
       more.style.display = open ? 'block' : 'none';
+      if (open) more.style.animation = 'fade .4s var(--ease) both';
       moreBtn.lastChild.textContent = open ? 'Weniger Felder' : 'Mehr Felder (Macro, Rating, SL/TP, Idee …)';
     } }, [App.icon('plus'), 'Mehr Felder (Macro, Rating, SL/TP, Idee …)']);
 
     const save = async () => {
-      if (!date.value) { alert('Bitte ein Datum wählen.'); return; }
+      if (!date.value) { App.toast('Bitte ein Datum wählen.'); return; }
       const out = {
         ...t,
         trade: title.value.trim(), date: date.value, day: App.weekdayName(date.value),
@@ -226,13 +248,16 @@ const TradeForm = {
       App.closePage();
     };
 
+    const card = (...kids) => App.el('div', { class: 'card' }, kids);
     return App.el('div', {}, [
-      UI.field('Trade', title),
-      App.el('div', { class: 'field-grid' }, [UI.field('Datum', App.el('div', {}, [date, dayLbl])), UI.field('R:R (Betrag)', App.el('div', {}, [rr, App.el('div', { class: 'tag', style: 'margin-top:6px' }, 'Vorzeichen ergibt sich aus dem Ergebnis')]))]),
-      UI.field('Pair', f.pair), UI.field('Long / Short', f.ls), UI.field('Model', f.model), UI.field('PO3', f.po3),
-      UI.field('Entry (Setup / Timeframe)', f.timeframes), UI.field('DoL', f.dol), UI.field('Ergebnis (W/L)', f.result),
-      UI.field('Psych', psych), UI.field('Notes', notes),
-      UI.field('Chart LTF', img.ltf), UI.field('Chart MTF', img.mtf), UI.field('Chart HTF', img.htf),
+      card(
+        UI.field('Trade', title),
+        App.el('div', { class: 'field-grid' }, [UI.field('Datum', App.el('div', {}, [date, dayLbl])), UI.field('R:R (Betrag)', App.el('div', {}, [rr, App.el('div', { class: 'tag', style: 'margin-top:6px' }, 'Vorzeichen folgt dem Ergebnis')]))]),
+        UI.field('Pair', f.pair), UI.field('Long / Short', f.ls),
+      ),
+      card(UI.field('Model', f.model), UI.field('PO3', f.po3), UI.field('Entry (Setup / Timeframe)', f.timeframes), UI.field('DoL', f.dol)),
+      card(UI.field('Ergebnis', f.result), UI.field('Psych', psych), UI.field('Notes', notes)),
+      card(UI.field('Chart LTF', img.ltf), UI.field('Chart MTF', img.mtf), UI.field('Chart HTF', img.htf)),
       moreBtn, more,
       App.el('div', { class: 'btn-row' }, [
         App.el('button', { class: 'btn secondary', onclick: () => App.back() }, 'Abbrechen'),

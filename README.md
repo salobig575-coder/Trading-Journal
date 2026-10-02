@@ -2,21 +2,23 @@
 
 Mobile-first PWA (Vanilla JS, IndexedDB, offline-fähig) – Nachbau des Notion-Templates **„Journal 2026 Community“** im Look & Feel der Produktiv-App.
 
-## Inhalt (1:1 aus dem Notion übernommen)
+## Inhalt (aus dem Notion übernommen)
 
 | Notion | In der App |
 | --- | --- |
-| Menu (Gallery) | **Home** – Kachel-Menü + Schnellaktionen (Trade / Analyse / Review) |
+| Menu (Gallery) | **Heute** – Wochen-Ergebnis, Routine, Schnellzugriffe; **+** unten für Trade / Analyse / Review |
 | Weekly Tracker | Wochenplaner (Intention, Priorities, Reminders, Affirmation, Mo–So) |
-| Journal (Trading Journal v2) | **Journal** – Liste/Galerie, Filter Alle/Heute/Woche/Monat, Detail & Formular |
-| My Analysis (Pre-Session Analysis) | **Analyse** – Weekly Outlook, Weekly Review, Daily Log |
-| REVIEW (Review DB) | **Analyse → Review** |
-| Statistics | **Statistik** – Setups (Timeframes, Models, PO3, DoL, Entry-Typen, Rating, Tickers, Results), Zeit (Weekdays, Killzones, Years, Monate) |
-| Equity Curve | Cumulative R:R + Net Daily R:R, Max Drawdown |
-| Monthly Performance / Kalender | Monatsübersicht + Kalender mit Tages-R |
-| W/L/B Trades | Wins / Losses / B/E / Tape |
+| Checklist | Mech & Continuation Model Checklist |
+| Journal (Trading Journal v2) | **Journal → Trades** – Liste/Galerie, Filter Zeitraum & Ergebnis (Wins/Losses/B-E/Tape) |
+| My Analysis (Pre-Session Analysis) | **Journal → Analysen** – Weekly Outlook, Weekly Review, Daily Log |
+| REVIEW (Review DB) | **Journal → Reviews** |
+| Statistics, Equity Curve, Monthly Performance | **Statistik** – Übersicht, Equity, Kalender + Monate, Setups, Zeit |
 | Trading Model, Mistakes | Abhakbare, editierbare Checklisten |
-| Edu Content, Bio Concepts, Backtests, Prop Firms | Sammlungen mit Suche, Tags, Link |
+| Edu Content, Bio Concepts, Backtests, Prop Firms | **Bibliothek** |
+
+## Routine (Habit-Tracker)
+
+Tägliche Gewohnheiten mit XP-Gewichtung: Tages-Ring, Wochen-Score (Mo–Fr, Wochenende optional), Monats-Score mit Heatmap, Streak und Feier-Effekt, wenn ein Tag/eine Woche/ein Monat komplett ist. Alles unter **Routine → Gewohnheiten & XP bearbeiten** anpassbar.
 
 Alle Auswahllisten (Pairs, Models, PO3, Entry-Setups, DoL, Macros, Ergebnisse …) stammen aus dem Notion und sind in den Einstellungen anpassbar.
 
