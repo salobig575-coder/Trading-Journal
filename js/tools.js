@@ -11,6 +11,60 @@ const ChecklistPage = {
   },
 };
 
+// Risiko-Rechner: Kontrakte aus Konto, Risiko-% und Stop-Loss (Punkte)
+const RiskCalc = {
+  instruments: [['NQ', 20], ['MNQ', 2], ['ES', 50], ['MES', 5]],
+
+  open() { App.openPage('Risiko-Rechner', () => this.render()); },
+
+  render() {
+    let saved = {};
+    try { saved = JSON.parse(localStorage.getItem('riskcalc') || '{}'); } catch (e) {}
+    const st = { account: saved.account || 50000, risk: saved.risk || 0.5, sl: saved.sl || 20, inst: saved.inst || 'MNQ' };
+
+    const account = App.el('input', { type: 'number', inputmode: 'decimal', value: st.account });
+    const risk = App.el('input', { type: 'number', inputmode: 'decimal', step: '0.1', value: st.risk });
+    const sl = App.el('input', { type: 'number', inputmode: 'decimal', step: '0.25', value: st.sl });
+    const inst = UI.chips(this.instruments.map(([n]) => n), st.inst, { deselect: false, onChange: () => calc() });
+    const out = App.el('div');
+    const money = (v) => v.toLocaleString('de-DE', { maximumFractionDigits: 0 }) + ' $';
+
+    const calc = () => {
+      st.account = parseFloat(account.value) || 0; st.risk = parseFloat(risk.value) || 0; st.sl = parseFloat(sl.value) || 0; st.inst = inst.get() || st.inst;
+      try { localStorage.setItem('riskcalc', JSON.stringify(st)); } catch (e) {}
+      const pv = this.instruments.find(([n]) => n === st.inst)[1];
+      const riskUsd = st.account * st.risk / 100;
+      const perContract = st.sl * pv;
+      const n = perContract > 0 ? Math.floor(riskUsd / perContract) : 0;
+      const used = n * perContract;
+      out.innerHTML = '';
+      out.appendChild(App.el('div', { class: 'stat-grid' }, [
+        this.tile('Kontrakte', String(n), n ? '' : 'neg'),
+        this.tile('Risiko', money(used)),
+      ]));
+      out.appendChild(App.el('div', { class: 'tag', style: 'margin:-4px 2px 0' },
+        n ? `Budget ${money(riskUsd)} · ${st.sl} Punkte × ${pv} $ = ${money(perContract)} pro Kontrakt · ${(st.sl * 4)} Ticks`
+          : `Zu wenig Risiko-Budget (${money(riskUsd)}) für diesen Stop – kleineres Instrument oder engeren SL wählen.`));
+    };
+    [account, risk, sl].forEach((i) => i.addEventListener('input', calc));
+    calc();
+
+    return App.el('div', {}, [
+      App.el('div', { class: 'card' }, [
+        UI.field('Instrument', inst),
+        UI.field('Konto ($)', account),
+        App.el('div', { class: 'field-grid' }, [UI.field('Risiko (%)', risk), UI.field('Stop-Loss (Punkte)', sl)]),
+      ]),
+      out,
+      App.el('div', { class: 'tag', style: 'margin:14px 2px' }, 'Punktwerte: NQ 20 $, MNQ 2 $, ES 50 $, MES 5 $ pro Punkt. 1 Punkt = 4 Ticks.'),
+    ]);
+  },
+
+  tile(label, value, cls = '') {
+    return App.el('div', { class: 'stat-tile' }, [App.el('div', { class: 'lbl' }, label), App.el('div', { class: 'num ' + cls }, value)]);
+  },
+};
+
 const WeeklyTracker = {
   openWeeks: null,
 

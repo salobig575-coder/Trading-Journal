@@ -69,7 +69,11 @@ const LibraryPage = {
       App.el('span', { html: Icons.chevronRight(), style: 'width:18px;height:18px;color:var(--dim)' }),
     ]);
     const wrap = App.el('div');
-    wrap.appendChild(App.el('div', { class: 'section-title', style: 'margin-top:4px' }, 'Performance'));
+    wrap.appendChild(App.el('div', { class: 'section-title', style: 'margin-top:4px' }, 'Tools'));
+    wrap.appendChild(App.el('div', { class: 'list' }, [
+      row('target', 'Risiko-Rechner', 'Kontrakte aus Konto, Risiko & SL', () => RiskCalc.open()),
+    ]));
+    wrap.appendChild(App.el('div', { class: 'section-title' }, 'Performance'));
     wrap.appendChild(App.el('div', { class: 'list' }, [
       row('alert', 'Mistakes', 'Typische Fehler vermeiden', () => ChecklistPage.open('mistakes', 'Mistakes', 'Write here your common mistakes, and try to avoid them next time')),
     ]));

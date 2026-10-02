@@ -100,6 +100,20 @@ const UI = {
     return App.el('div', {}, (images || []).map((src) => App.el('img', { class: 'img-big', src, alt: '', onclick: () => UI.lightbox(src) })));
   },
 
+  // Zaehlt abgehakte Punkte einer Checklisten-Struktur (rekursiv)
+  countChecks(doc) {
+    const walk = (items) => items.reduce((a, it) => {
+      const c = walk(it.children || []);
+      return { done: a.done + (it.checked ? 1 : 0) + c.done, total: a.total + 1 + c.total };
+    }, { done: 0, total: 0 });
+    return (doc.sections || []).reduce((a, s) => { const c = walk(s.items); return { done: a.done + c.done, total: a.total + c.total }; }, { done: 0, total: 0 });
+  },
+
+  resetChecks(doc) {
+    const walk = (items) => items.forEach((i) => { i.checked = false; walk(i.children || []); });
+    (doc.sections || []).forEach((s) => walk(s.items));
+  },
+
   pill(text, kind = '') {
     return App.el('span', { class: 'pill ' + kind }, text);
   },

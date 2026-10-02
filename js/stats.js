@@ -6,6 +6,7 @@ const StatsHub = {
   wlb: 'win',
   tabs: [
     { key: 'overview', label: 'Übersicht' },
+    { key: 'week', label: 'Woche' },
     { key: 'equity', label: 'Equity' },
     { key: 'calendar', label: 'Kalender' },
     { key: 'setups', label: 'Setups' },
@@ -25,7 +26,7 @@ const StatsHub = {
     if (tab === 'calendar') {
       wrap.appendChild(this.calendar(trades));
       wrap.appendChild(this.months(trades));
-    } else wrap.appendChild(this[tab](trades));
+    } else wrap.appendChild(await this[tab](trades));
     return wrap;
   },
 
@@ -69,6 +70,71 @@ const StatsHub = {
         App.el('div', { class: 'stat' }, [App.el('div', { class: 'num pos' }, Calc.fmtR(s.best, 1)), App.el('div', { class: 'lbl' }, 'Bester Trade')]),
         App.el('div', { class: 'stat' }, [App.el('div', { class: 'num neg' }, Calc.fmtR(s.worst, 1)), App.el('div', { class: 'lbl' }, 'Schlechtester')]),
       ])));
+    return wrap;
+  },
+
+  // Wochen-Auswertung: Ergebnis, beste/schlechteste Trades, Routine und deren Zusammenhang mit deinem R
+  async week(trades) {
+    await Habits.load();
+    const wrap = App.el('div');
+    const today = App.todayStr();
+    if (!this.weekStart) this.weekStart = App.weekStart(today);
+    const start = this.weekStart, end = App.addDays(start, 6);
+    const w = App.isoWeek(start).week;
+    const shift = (n) => { this.weekStart = App.addDays(start, n * 7); App.refresh(); };
+    wrap.appendChild(App.el('div', { class: 'cal-head' }, [
+      App.el('button', { class: 'icon-btn', html: Icons.chevronLeft(), onclick: () => shift(-1) }),
+      App.el('div', { class: 'ttl' }, `KW ${w} · ${App.formatDate(start).slice(0, 5)} – ${App.formatDate(end).slice(0, 5)}`),
+      App.el('button', { class: 'icon-btn', style: end >= today ? 'opacity:.25;pointer-events:none' : '', html: Icons.chevronRight(), onclick: () => shift(1) }),
+    ]));
+
+    const wt = Calc.sort(trades.filter((t) => t.date >= start && t.date <= end));
+    const s = Calc.summary(wt);
+    wrap.appendChild(App.el('div', { class: 'stat-grid three' }, [
+      this.tile('Trades', String(wt.length)), this.tile('Winrate', `${Math.round(s.winrate)}%`), this.tile('Net R', Calc.fmtR(s.net, 1), Calc.rClass(s.net)),
+    ]));
+
+    const closed = wt.filter((t) => ['win', 'loss', 'be'].includes(Calc.outcome(t)));
+    if (closed.length) {
+      const byR = closed.slice().sort((a, b) => Calc.rValue(b) - Calc.rValue(a));
+      const line = (label, t, cls) => App.el('div', { class: 'row between', style: 'padding:6px 0' }, [
+        App.el('div', {}, [App.el('div', { class: 'tag' }, label), App.el('div', { style: 'font-weight:600' }, t.trade || t.pair || 'Trade')]),
+        App.el('div', { class: 'r-val ' + cls }, Calc.fmtR(Calc.rValue(t), 1)),
+      ]);
+      wrap.appendChild(this.card('Highlights', 'trophy', line('Bester Trade', byR[0], 'pos'), line('Schwächster Trade', byR.at(-1), Calc.rClass(Calc.rValue(byR.at(-1))))));
+      const daily = Calc.dailyR(wt);
+      wrap.appendChild(this.card('Ergebnis pro Tag', 'stats', Charts.bars(Habits.weekDates(start).filter((d) => daily[d] !== undefined).map((d) => ({ label: App.formatDate(d), value: Math.round(daily[d] * 100) / 100 })), { height: 110 })));
+    } else {
+      wrap.appendChild(App.empty('journal', 'Keine abgeschlossenen Trades in dieser Woche.'));
+    }
+
+    // Routine dieser Woche
+    const r = Habits.range(Habits.weekDates(start));
+    if (r.max) {
+      const bar = App.el('div', { class: 'progress' }, [App.el('i')]);
+      wrap.appendChild(this.card('Routine in dieser Woche', 'routine',
+        App.el('div', { class: 'score-line' }, [App.el('div', { class: 'pct' }, `${Math.round(r.pct * 100)}%`), App.el('div', { class: 'tag' }, `${r.earned} / ${r.max} XP`)]), bar));
+      requestAnimationFrame(() => requestAnimationFrame(() => { bar.firstChild.style.width = r.pct * 100 + '%'; }));
+    }
+
+    // Zusammenhang Routine <-> Ergebnis (alle Tage)
+    const dailyAll = Calc.dailyR(trades);
+    const hi = [], lo = [];
+    Object.keys(dailyAll).forEach((d) => {
+      const ds = Habits.day(d);
+      if (!ds.max) return;
+      (ds.pct >= 0.8 ? hi : lo).push(dailyAll[d]);
+    });
+    const avg = (a) => a.reduce((x, y) => x + y, 0) / a.length;
+    const insight = (hi.length >= 3 && lo.length >= 3)
+      ? App.el('div', { class: 'stat-row' }, [
+        App.el('div', { class: 'stat' }, [App.el('div', { class: 'num ' + Calc.rClass(avg(hi)) }, Calc.fmtR(avg(hi), 1)), App.el('div', { class: 'lbl' }, `Routine ≥ 80 % (${hi.length} Tage)`)]),
+        App.el('div', { class: 'stat' }, [App.el('div', { class: 'num ' + Calc.rClass(avg(lo)) }, Calc.fmtR(avg(lo), 1)), App.el('div', { class: 'lbl' }, `Routine < 80 % (${lo.length} Tage)`)]),
+      ])
+      : App.el('div', { class: 'tag' }, 'Sobald du an mindestens je 3 Tagen mit und ohne starke Routine getradet hast, siehst du hier, wie sich deine Routine auf dein Ø-Tagesergebnis auswirkt.');
+    wrap.appendChild(this.card('Routine & Ergebnis', 'sparkles', insight));
+
+    if (wt.length) wrap.appendChild(App.el('div', { class: 'list' }, wt.slice().reverse().map((t, i) => JournalView.tradeItem(t, i))));
     return wrap;
   },
 

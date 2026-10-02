@@ -151,6 +151,7 @@ const TradeDetail = {
       prop('Pair', t.pair), prop('Long/Short', t.ls), prop('Model', t.model), prop('PO3', t.po3),
       prop('Ergebnis', t.result),
       o && o !== 'tape' ? prop('R:R (netto)', Calc.fmtR(r)) : null,
+      t.check ? prop('Model-Check', `${t.check.done} / ${t.check.total}`) : null,
       prop('Rating', t.rating), prop('Bias (W/L)', t.bias), prop('P/L', t.pl),
       prop('SL (Punkte)', t.slPoints), prop('TP (Punkte)', t.tpPoints),
       prop('Entry', t.timeframes, true), prop('Entry-Typ', t.entryTypes, true), prop('DoL', t.dol, true), prop('Macro', t.macro, true),
@@ -163,7 +164,9 @@ const TradeDetail = {
       .filter(([, k]) => t.images && t.images[k] && t.images[k].length)
       .map(([label, k]) => App.el('div', {}, [App.el('div', { class: 'lbl-up' }, label), UI.imageViewer(t.images[k])]));
 
+    const cover = JournalView.firstImage(t);
     const content = App.el('div', {}, [
+      cover ? App.el('img', { src: cover, alt: '', style: 'width:100%;aspect-ratio:16/10;object-fit:cover;border-radius:18px;margin-bottom:16px;cursor:zoom-in', onclick: () => UI.lightbox(cover) }) : null,
       App.el('h3', {}, t.trade || t.pair || 'Trade'),
       grid, ...texts, ...imgs,
       App.el('div', { class: 'btn-row' }, [
@@ -181,8 +184,40 @@ const TradeForm = {
     App.openPage(existing ? 'Trade bearbeiten' : 'Neuer Trade', () => this.render(existing));
   },
 
-  render(existing) {
+  async render(existing) {
     const t = existing ? { ...existing, images: { ...(existing.images || {}) } } : { id: DB.uid(), createdAt: Date.now(), date: App.todayStr(), images: {} };
+
+    // Pre-Trade-Check (nur bei neuen Trades): Trading Model abhaken + Warnung bei >= 2 Trades heute
+    const modelDoc = existing ? null : await DB.get('checklists', 'tradingModel');
+    const todayCount = existing ? 0 : (await DB.getAll('trades')).filter((x) => x.date === App.todayStr()).length;
+    let checkCard = null;
+    if (modelDoc) {
+      const cnt = App.el('div', { class: 'tag' });
+      const bar = App.el('div', { class: 'progress', style: 'margin-top:12px' }, [App.el('i')]);
+      const upd = () => {
+        const c = UI.countChecks(modelDoc);
+        cnt.textContent = c.total ? `${c.done} von ${c.total} Punkten erfüllt` : 'Noch keine Punkte im Trading Model';
+        requestAnimationFrame(() => { bar.firstChild.style.width = (c.total ? (c.done / c.total) * 100 : 0) + '%'; });
+      };
+      upd();
+      const open = () => {
+        const bd = App.showModal(App.el('div', {}, [
+          App.el('h3', {}, 'Pre-Trade-Check'),
+          UI.checklist(modelDoc, { progressLabel: 'Trading Model', multiSection: false }),
+          App.el('button', { class: 'btn', style: 'margin-top:12px', onclick: () => App.closeModal() }, 'Fertig'),
+        ]));
+        const obs = new MutationObserver(() => { if (!document.body.contains(bd)) { upd(); obs.disconnect(); } });
+        obs.observe(document.body, { childList: true });
+      };
+      checkCard = App.el('div', { class: 'card' }, [
+        App.el('div', { class: 'row between' }, [
+          App.el('div', {}, [App.el('div', { style: 'font-weight:600;font-size:16px' }, 'Pre-Trade-Check'), cnt]),
+          App.el('button', { class: 'btn small secondary', onclick: open }, [App.icon('target', 15), 'Öffnen']),
+        ]),
+        bar,
+        todayCount >= 2 ? App.el('div', { class: 'callout', style: 'margin:14px 0 0' }, [App.el('span', { html: Icons.alert(), style: 'color:var(--loss)' }), App.el('div', { class: 'tag', style: 'color:var(--text)' }, `Du hattest heute schon ${todayCount} Trades. Laut deinem Model: max. 2 pro Tag.`)]) : null,
+      ]);
+    }
 
     const title = App.el('input', { type: 'text', value: t.trade || '', placeholder: 'z. B. NQ Long 9:45' });
     const date = App.el('input', { type: 'date', value: t.date });
@@ -244,12 +279,21 @@ const TradeForm = {
         images: { ltf: img.ltf.get(), mtf: img.mtf.get(), htf: img.htf.get(), photo: img.photo.get() },
         updatedAt: Date.now(),
       };
+      if (modelDoc) {
+        const c = UI.countChecks(modelDoc);
+        if (c.done > 0) {
+          out.check = { done: c.done, total: c.total };
+          UI.resetChecks(modelDoc); // naechster Trade startet mit leerer Checkliste
+          await DB.put('checklists', modelDoc);
+        }
+      }
       await DB.put('trades', out);
       App.closePage();
     };
 
     const card = (...kids) => App.el('div', { class: 'card' }, kids);
     return App.el('div', {}, [
+      checkCard,
       card(
         UI.field('Trade', title),
         App.el('div', { class: 'field-grid' }, [UI.field('Datum', App.el('div', {}, [date, dayLbl])), UI.field('R:R (Betrag)', App.el('div', {}, [rr, App.el('div', { class: 'tag', style: 'margin-top:6px' }, 'Vorzeichen folgt dem Ergebnis')]))]),
